@@ -1,0 +1,52 @@
+{
+  "goat": {
+    "space_requirements": {
+      "adult_indoor_sqft": 15,
+      "adult_outdoor_sqft": 25,
+      "kid_sqft": 8,
+      "feeding_trough_length_inches": 20,
+      "water_trough_length_inches": 12
+    },
+    "housing_specs": {
+      "roof_height_minimum_ft": 8,
+      "ventilation_cf_per_animal": 20,
+      "floor_slope_percent": 2,
+      "bedding_depth_inches": 6
+    },
+    "climate_adjustments": {
+      "tropical": {"ventilation_multiplier": 2.0, "shade_required": true},
+      "dry": {"ventilation_multiplier": 1.5, "cooling_required": true},
+      "temperate": {"ventilation_multiplier": 1.0, "insulation_required": false},
+      "cold": {"ventilation_multiplier": 0.7, "heating_required": true}
+    }
+  },
+  "chicken": {
+    "space_requirements": {
+      "free_range_indoor_sqft": 2,
+      "free_range_outdoor_sqft": 10,
+      "cage_system_sqft": 0.5,
+      "brooder_chick_sqft": 0.5
+    },
+    "housing_specs": {
+      "nest_boxes_per_4_hens": 1,
+      "roosting_space_per_bird_inches": 8,
+      "feeder_space_per_bird_inches": 4,
+      "waterer_space_per_bird_inches": 1
+    }
+  },
+  "pig": {
+    "space_requirements": {
+      "farrowing_crate_sqft": 50,
+      "nursery_per_piglet_sqft": 8,
+      "grower_per_pig_sqft": 12,
+      "finisher_per_pig_sqft": 20,
+      "boar_pen_sqft": 60
+    },
+    "housing_specs": {
+      "slatted_floor_percent": 60,
+      "ceiling_height_ft": 8,
+      "temperature_nursery_f": 85,
+      "temperature_finisher_f": 70
+    }
+  }
+}
