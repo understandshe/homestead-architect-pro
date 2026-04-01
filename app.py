@@ -1,6 +1,6 @@
 """
 🏡 Homestead Architect Pro 2026
-Main Application Entry Point
+Main Application Entry Point - FIXED VERSION
 """
 
 import streamlit as st
@@ -16,7 +16,7 @@ from core.livestock_designer import LivestockDesigner
 from core.cost_calculator import CostCalculator
 from core.climate_engine import ClimateEngine
 from core.visualizer_2d import Visualizer2D
-from core.visualizer_3d import Visualizer3D
+# from core.visualizer_3d import Visualizer3D  # ← REMOVE for now
 from core.watermark_system import WatermarkEngine, PDFWatermark
 from core.pdf_generator import PDFGenerator
 
@@ -51,12 +51,6 @@ st.markdown("""
         padding: 1rem 2rem;
         border-radius: 10px;
     }
-    .feature-card {
-        background-color: #F1F8E9;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border-left: 5px solid #2E7D32;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -67,10 +61,9 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.image("https://via.placeholder.com/150x150/2E7D32/FFFFFF?text=HA+Pro", width=150)
         st.title("⚙️ Settings")
         
-        # Watermark Toggle (YOUR SPEC)
+        # Watermark Toggle
         watermark_enabled = st.checkbox(
             "☑️ Add Watermark (chundalgardens.com)",
             value=True,
@@ -83,7 +76,7 @@ def main():
             st.warning("⚠️ Protection mode active")
         
         st.divider()
-        st.markdown("**Made by:** [Chundal Gardens](https://chundalgardens.com)")
+        st.markdown("**Made by:** Chundal Gardens")
         st.markdown("**Version:** 2026.1.0")
     
     # Main Content Tabs
@@ -136,7 +129,7 @@ def design_tab(watermark_enabled):
                 # Display
                 st.image(final_buffer, use_column_width=True)
                 
-                # Store in session for download
+                # Store in session
                 st.session_state['current_map'] = final_buffer
                 st.session_state['layout_data'] = layout
         
@@ -239,13 +232,6 @@ def download_tab(watermark_enabled):
             file_name=f"homestead_plan_{st.session_state.get('project_name', 'myfarm')}.png",
             mime="image/png"
         )
-        
-        # 3D View option
-        if st.button("🎲 Generate 3D View"):
-            with st.spinner("Rendering 3D..."):
-                viz3d = Visualizer3D()
-                scene = viz3d.create(st.session_state['layout_data'])
-                st.plotly_chart(scene, use_container_width=True)
     
     with col2:
         st.subheader("📄 Full Report (PDF)")
