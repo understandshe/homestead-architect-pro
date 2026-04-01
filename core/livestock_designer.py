@@ -84,7 +84,7 @@ class LivestockDesigner:
             'specs': {
                 'Indoor Area': f"{indoor_area:.0f} sq ft",
                 'Outdoor Area': f"{outdoor_area:.0f} sq ft",
-                'Dimensions': f"{width}' × {length}' × {height}'",
+                'Dimensions': f"{width}' Ã— {length}' Ã— {height}'",
                 'Capacity': f"{count} adult goats",
                 'Features': ', '.join(features) if features else 'Basic'
             },
@@ -320,4 +320,3 @@ class LivestockDesigner:
         
         total = base_cost * multiplier
         return f"${total:,.0f} - ${total * 1.3:,.0f}"
-
