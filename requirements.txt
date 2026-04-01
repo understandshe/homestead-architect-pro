@@ -1,0 +1,36 @@
+
+---
+
+## 📄 **FILE 2: requirements.txt**
+
+```txt
+# Core
+streamlit==1.28.0
+numpy==1.24.3
+pillow==10.0.0
+pandas==2.0.3
+
+# Visualization
+matplotlib==3.7.2
+plotly==5.15.0
+pydeck==0.8.0
+
+# 3D Support
+trimesh==3.22.1
+pyglet==2.0.7
+
+# PDF Generation
+reportlab==4.0.4
+fpdf2==2.7.5
+
+# Data
+requests==2.31.0
+geopy==2.3.0
+
+# Utilities
+python-dotenv==1.0.0
+pydantic==2.3.0
+
+# Optional: For advanced 3D
+# pyvista==0.41.1
+# vtk==9.2.6
