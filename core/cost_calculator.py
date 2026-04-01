@@ -71,3 +71,4 @@ class CostCalculator:
                 'Labor': setup_min * 0.15
             }
         }
+
