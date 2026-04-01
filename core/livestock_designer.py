@@ -320,3 +320,4 @@ class LivestockDesigner:
         
         total = base_cost * multiplier
         return f"${total:,.0f} - ${total * 1.3:,.0f}"
+
