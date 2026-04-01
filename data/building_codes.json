@@ -1,0 +1,171 @@
+{
+  "USA": {
+    "zoning": {
+      "agricultural_zones": ["A-1", "A-2", "RA"],
+      "minimum_lot_size_acres": {
+        "A-1": 5,
+        "A-2": 2,
+        "RA": 1
+      }
+    },
+    "livestock_regulations": {
+      "chickens": {
+        "maximum_without_permit": 50,
+        "distance_from_property_line_ft": 25,
+        "distance_from_dwelling_ft": 50,
+        "rooster_allowed": "Check local ordinance"
+      },
+      "goats": {
+        "maximum_without_permit": 12,
+        "distance_from_property_line_ft": 50,
+        "distance_from_dwelling_ft": 100,
+        "fencing_requirement": "6ft minimum, predator-proof"
+      },
+      "pigs": {
+        "maximum_without_permit": 5,
+        "distance_from_property_line_ft": 100,
+        "distance_from_water_body_ft": 200,
+        "manure_management_required": true
+      }
+    },
+    "structure_requirements": {
+      "livestock_building_permit_sqft": 200,
+      "electrical_permit_required": true,
+      "plumbing_permit_required": true,
+      "septic_requirement": "For >3 bedroom equivalent waste"
+    },
+    "links": {
+      "USDA_extension": "https://nifa.usda.gov/extension",
+      "zoning_lookup": "https://www.municode.com/"
+    }
+  },
+
+  "India": {
+    "zoning": {
+      "agricultural_zones": ["Green Belt", "Agricultural Zone", "Rural"],
+      "minimum_plot_size": {
+        "goat_housing": "200 sqm",
+        "poultry_100_birds": "500 sqm",
+        "piggery_10_animals": "1000 sqm"
+      }
+    },
+    "livestock_regulations": {
+      "chickens": {
+        "backyard_limit": "No limit (rural)",
+        "commercial_permit": ">500 birds",
+        "distance_from_house": "15 meters",
+        "biosecurity_required": "For >100 birds"
+      },
+      "goats": {
+        "grazing_rights": "Common land where available",
+        "shed_requirements": "Ventilated, elevated floor",
+        "vaccination_mandatory": ["PPR", "ET", "FMD"]
+      },
+      "pigs": {
+        "restricted_areas": ["Religious sites 500m", "Water bodies 200m"],
+        "waste_treatment": "Biogas or compost mandatory",
+        "breed_registration": "Required for commercial"
+      }
+    },
+    "subsidies": {
+      "NABARD": "50% subsidy on shed construction",
+      "state_schemes": {
+        "Kerala": "100% subsidy for tribal farmers",
+        "Rajasthan": "Desert development fund",
+        "UP": "Mukhyamantri Krishak Durghatna Bhagya Yojana"
+      }
+    },
+    "links": {
+      "NABARD": "https://www.nabard.org",
+      "DAHD": "https://dahd.nic.in",
+      "state_agriculture_dept": "Varies by state"
+    }
+  },
+
+  "UK": {
+    "zoning": {
+      "agricultural_land_classes": ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"],
+      "permitted_development_rights": "Agricultural buildings <465 sqm"
+    },
+    "livestock_regulations": {
+      "animal_welfare": "Welfare of Farmed Animals Regulations 2007",
+      "stocking_densities": {
+        "laying_hens": "750 birds/sqm (cage-free)",
+        "broilers": "33 kg/sqm",
+        "pigs": "Fully slatted: 0.8 sqm per 100kg"
+      },
+      "environmental": {
+        "nitrate_vulnerable_zones": "Restricted manure application",
+        "slurry_storage": "6 months capacity required"
+      }
+    },
+    "planning_permission": {
+      "agricultural_buildings": "Permitted development if <465 sqm",
+      "dwellings": "Agricultural occupancy condition",
+      "change_of_use": "Planning permission required"
+    },
+    "links": {
+      "DEFRA": "https://www.gov.uk/government/organisations/department-for-environment-food-rural-affairs",
+      "AHDB": "https://ahdb.org.uk"
+    }
+  },
+
+  "Australia": {
+    "zoning": {
+      "rural_zones": ["RU1", "RU2", "RU3", "RU4", "RU5"],
+      "primary_production": "Generally permitted in rural zones"
+    },
+    "livestock_regulations": {
+      "state_variations": true,
+      "biosecurity": {
+        "property_identification_code": "Required for >100 birds or >10 pigs",
+        "movement_records": "Mandatory"
+      },
+      "water_access": "Riparian rights vary by state"
+    },
+    "climate_considerations": {
+      "bushfire_prone_areas": "Asset protection zones required",
+      "drought_declaration": "Water restrictions apply"
+    },
+    "links": {
+      "DAWE": "https://www.awe.gov.au",
+      "state_departments": "NSW DPI, Agriculture Victoria, etc."
+    }
+  },
+
+  "Canada": {
+    "zoning": {
+      "provincial_control": true,
+      "agricultural_land_reserves": "BC, Ontario specific"
+    },
+    "livestock_regulations": {
+      "animal_care": "Provincial animal protection acts",
+      "environmental": "Nutrient management plans required in some provinces",
+      "winter_housing": "Mandatory for most species"
+    },
+    "building_requirements": {
+      "snow_load": "Critical in all provinces",
+      "insulation": "R-20 minimum for animal housing",
+      "ventilation": "Frost protection required"
+    },
+    "links": {
+      "AAFC": "https://agriculture.canada.ca",
+      "provincial_ministries": "OMAFRA, Alberta Agriculture, etc."
+    }
+  },
+
+  "General": {
+    "universal_principles": {
+      "animal_welfare": "Five freedoms framework",
+      "biosecurity": "Isolation, traffic control, sanitation",
+      "environmental": "Prevent pollution, manage waste",
+      "food_safety": "Traceability, hygiene, record keeping"
+    },
+    "recommended_spacing": {
+      "residential_to_livestock": "50 meters minimum",
+      "livestock_to_water": "30 meters minimum",
+      "compost_to_well": "15 meters minimum",
+      "manure_storage_to_stream": "100 meters minimum"
+    }
+  }
+}
