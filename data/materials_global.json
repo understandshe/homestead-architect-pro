@@ -1,0 +1,67 @@
+{
+  "USA": {
+    "currency": "USD",
+    "labor_rate_per_hour": 25,
+    "materials": {
+      "concrete_per_cubic_yard": 120,
+      "steel_per_kg": 0.80,
+      "lumber_per_board_foot": 1.50,
+      "bricks_per_1000": 600,
+      "roofing_sheet": 25,
+      "wire_mesh_per_sqft": 0.50,
+      "pvc_pipe_per_ft": 2.00
+    }
+  },
+  "India": {
+    "currency": "INR",
+    "labor_rate_per_hour": 500,
+    "materials": {
+      "concrete_per_cubic_yard": 4000,
+      "steel_per_kg": 55,
+      "lumber_per_board_foot": 80,
+      "bricks_per_1000": 8000,
+      "roofing_sheet": 800,
+      "wire_mesh_per_sqft": 25,
+      "pvc_pipe_per_ft": 100
+    }
+  },
+  "UK": {
+    "currency": "GBP",
+    "labor_rate_per_hour": 20,
+    "materials": {
+      "concrete_per_cubic_yard": 90,
+      "steel_per_kg": 0.60,
+      "lumber_per_board_foot": 1.20,
+      "bricks_per_1000": 500,
+      "roofing_sheet": 20,
+      "wire_mesh_per_sqft": 0.40,
+      "pvc_pipe_per_ft": 1.50
+    }
+  },
+  "Canada": {
+    "currency": "CAD",
+    "labor_rate_per_hour": 30,
+    "materials": {
+      "concrete_per_cubic_yard": 140,
+      "steel_per_kg": 0.90,
+      "lumber_per_board_foot": 1.80,
+      "bricks_per_1000": 700,
+      "roofing_sheet": 30,
+      "wire_mesh_per_sqft": 0.60,
+      "pvc_pipe_per_ft": 2.50
+    }
+  },
+  "Australia": {
+    "currency": "AUD",
+    "labor_rate_per_hour": 35,
+    "materials": {
+      "concrete_per_cubic_yard": 150,
+      "steel_per_kg": 0.95,
+      "lumber_per_board_foot": 2.00,
+      "bricks_per_1000": 800,
+      "roofing_sheet": 35,
+      "wire_mesh_per_sqft": 0.70,
+      "pvc_pipe_per_ft": 3.00
+    }
+  }
+}
