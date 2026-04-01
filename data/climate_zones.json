@@ -1,0 +1,168 @@
+{
+  "Tropical": {
+    "zones": ["Tropical Rainforest", "Tropical Monsoon", "Tropical Savanna"],
+    "characteristics": {
+      "temperature_range_celsius": {"min": 20, "max": 35},
+      "rainfall_mm_per_year": {"min": 1500, "max": 4000},
+      "humidity_percent": {"min": 70, "max": 95},
+      "growing_season_days": 365,
+      "challenges": [
+        "Heavy rainfall erosion",
+        "High pest pressure",
+        "Fungal diseases",
+        "Heat stress on animals"
+      ]
+    },
+    "recommendations": {
+      "roof_design": "Steep pitch (30-45°) for rain runoff",
+      "ventilation": "Maximum airflow, 40% open walls",
+      "materials": ["Corrugated metal", "Bamboo", "Concrete"],
+      "crops": ["Rice", "Coconut", "Banana", "Cassava", "Pineapple"],
+      "livestock_adaptations": {
+        "goats": "Elevated housing, shade nets",
+        "chickens": "Open-sided sheds, cooling pads",
+        "pigs": "Wallowing ponds, high ventilation"
+      },
+      "water_management": {
+        "rainwater_harvesting": "Essential - 2000L per 100 sqm roof",
+        "drainage": "French drains every 10 meters",
+        "swales": "Contour planting mandatory"
+      }
+    },
+    "countries": ["India (Kerala, Goa)", "Thailand", "Brazil", "Kenya", "Indonesia", "Philippines", "Vietnam", "Malaysia", "Sri Lanka", "Bangladesh"]
+  },
+
+  "Dry": {
+    "zones": ["Arid", "Semi-Arid", "Mediterranean"],
+    "characteristics": {
+      "temperature_range_celsius": {"min": 10, "max": 45},
+      "rainfall_mm_per_year": {"min": 100, "max": 600},
+      "humidity_percent": {"min": 10, "max": 40},
+      "growing_season_days": 240,
+      "challenges": [
+        "Water scarcity",
+        "Desertification risk",
+        "Extreme heat",
+        "Dust storms"
+      ]
+    },
+    "recommendations": {
+      "roof_design": "Flat or slight pitch, white reflective coating",
+      "ventilation": "Controlled, dust-filtered intakes",
+      "materials": ["Adobe", "Stone", "Thick concrete", "Reflective metal"],
+      "crops": ["Millet", "Sorghum", "Dates", "Olives", "Figs", "Pomegranate"],
+      "livestock_adaptations": {
+        "goats": "Desert breeds, night grazing",
+        "chickens": "Evaporative cooling, deep litter",
+        "pigs": "Not recommended (water intensive)"
+      },
+      "water_management": {
+        "rainwater_harvesting": "Critical - every drop stored",
+        "groundwater": "Deep borewells (100m+)",
+        "drip_irrigation": "Mandatory, 95% efficiency target",
+        "greywater_recycling": "Essential"
+      }
+    },
+    "countries": ["Rajasthan (India)", "Rajasthan", "Arizona (USA)", "Egypt", "Saudi Arabia", "Australia (Outback)", "Namibia", "Chile (Atacama)", "Morocco", "Iran"]
+  },
+
+  "Temperate": {
+    "zones": ["Oceanic", "Continental", "Humid Subtropical"],
+    "characteristics": {
+      "temperature_range_celsius": {"min": -5, "max": 30},
+      "rainfall_mm_per_year": {"min": 500, "max": 1500},
+      "humidity_percent": {"min": 40, "max": 70},
+      "growing_season_days": 200,
+      "challenges": [
+        "Winter frost",
+        "Variable weather",
+        "Seasonal planning required",
+        "Storage needs"
+      ]
+    },
+    "recommendations": {
+      "roof_design": "Medium pitch (25-35°), snow load rated",
+      "ventilation": "Adjustable - summer max, winter minimum",
+      "materials": ["Brick", "Stone", "Wood", "Metal roofing"],
+      "crops": ["Wheat", "Corn", "Potatoes", "Apples", "Grapes", "Tomatoes"],
+      "livestock_adaptations": {
+        "goats": "Insulated barns, heated water",
+        "chickens": "Draft-free coops, supplemental lighting",
+        "pigs": "Deep bedding, windbreaks"
+      },
+      "water_management": {
+        "rainwater_harvesting": "Recommended - 1000L storage",
+        "ponds": "Spring-fed preferred",
+        "irrigation": "Sprinkler or drip, seasonal timing"
+      }
+    },
+    "countries": ["UK", "Germany", "France", "Northern USA", "Canada (South)", "New Zealand", "Japan", "Korea", "Poland", "Ukraine"]
+  },
+
+  "Cold": {
+    "zones": ["Boreal", "Tundra", "Alpine", "Subarctic"],
+    "characteristics": {
+      "temperature_range_celsius": {"min": -40, "max": 20},
+      "rainfall_mm_per_year": {"min": 200, "max": 800},
+      "humidity_percent": {"min": 30, "max": 60},
+      "growing_season_days": 120,
+      "challenges": [
+        "Frozen ground 6+ months",
+        "Short growing season",
+        "High heating costs",
+        "Animal winter care"
+      ]
+    },
+    "recommendations": {
+      "roof_design": "Steep pitch (45°+), snow shedding, insulated",
+      "ventilation": "Minimal, heat recovery ventilators",
+      "materials": ["Insulated concrete", "Double-walled wood", "Metal (insulated)"],
+      "crops": ["Root vegetables", "Hardy greens", "Greenhouse tomatoes", "Potatoes"],
+      "livestock_adaptations": {
+        "goats": "Heated barns, winter indoor housing",
+        "chickens": "Insulated coops, heat lamps, no outdoor winter",
+        "pigs": "Heated floors, high-energy feed, indoor only"
+      },
+      "water_management": {
+        "rainwater_harvesting": "Summer only, freeze protection",
+        "groundwater": "Deep wells, pump houses heated",
+        "snow_melt": "Collected for irrigation",
+        "heated_waterers": "Essential for livestock"
+      }
+    },
+    "countries": ["Alaska (USA)", "Canada (North)", "Norway", "Sweden", "Finland", "Russia (Siberia)", "Iceland", "Greenland", "Mongolia", "Northern China"]
+  },
+
+  "Highland": {
+    "zones": ["Mountain", "Plateau"],
+    "characteristics": {
+      "temperature_range_celsius": {"min": -10, "max": 25},
+      "rainfall_mm_per_year": {"min": 300, "max": 2000},
+      "humidity_percent": {"min": 20, "max": 80},
+      "growing_season_days": 150,
+      "challenges": [
+        "Altitude sickness (animals)",
+        "Intense UV",
+        "Erosion",
+        "Temperature swings"
+      ]
+    },
+    "recommendations": {
+      "roof_design": "Wind-resistant, anchored, hail-proof",
+      "ventilation": "Wind baffles, adjustable",
+      "materials": ["Stone", "Concrete", "Metal (anchored)"],
+      "crops": ["Quinoa", "Potatoes", "Barley", "High-altitude varieties"],
+      "livestock_adaptations": {
+        "goats": "Mountain breeds, windbreaks",
+        "chickens": "Draft-proof, altitude-adapted breeds",
+        "pigs": "Not recommended (altitude stress)"
+      },
+      "water_management": {
+        "spring_capture": "Primary source",
+        "gravity_fed": "Use elevation",
+        "terracing": "Essential for crops"
+      }
+    },
+    "countries": ["Tibet", "Nepal", "Bhutan", "Peru", "Ecuador", "Ethiopia (Highlands)", "Colorado (USA)", "Swiss Alps"]
+  }
+}
