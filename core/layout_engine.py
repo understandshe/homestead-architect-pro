@@ -1,25 +1,16 @@
 """
-AI Layout Engine — FIXED
+AI Layout Engine â€” v3 PROFESSIONAL
 Homestead Architect Pro 2026
-Fixes:
-  - Feature keys now match what visualizer_2d / visualizer_3d expect
-  - 'borewell' → 'well' (visualizer looks for 'well')
-  - Individual livestock sheds per animal type (goat_shed, chicken_coop, etc.)
-  - Fish pond added when Fish selected
-  - Positions calculated relative to house_position so features are
-    always inside property boundary and logically placed
 """
 
-import numpy as np
 from typing import Dict, Any
 
 
 class LayoutEngine:
-    """Core algorithm for homestead layout generation."""
 
     ZONE_RATIOS = {
-        'small':  {'z0': 0.10, 'z1': 0.15, 'z2': 0.25, 'z3': 0.40, 'z4': 0.10},
-        'medium': {'z0': 0.08, 'z1': 0.12, 'z2': 0.30, 'z3': 0.35, 'z4': 0.15},
+        'small':  {'z0': 0.10, 'z1': 0.18, 'z2': 0.22, 'z3': 0.38, 'z4': 0.12},
+        'medium': {'z0': 0.08, 'z1': 0.14, 'z2': 0.28, 'z3': 0.35, 'z4': 0.15},
         'large':  {'z0': 0.05, 'z1': 0.10, 'z2': 0.35, 'z3': 0.30, 'z4': 0.20},
     }
 
@@ -28,222 +19,181 @@ class LayoutEngine:
         L, W = float(dims['length']), float(dims['width'])
         total_sqft = L * W
         acres = total_sqft / 43560
-
         category = 'small' if acres < 0.5 else ('medium' if acres < 5 else 'large')
         zones = self.ZONE_RATIOS[category].copy()
-
         house_pos = answers.get('house_position', 'Center')
-        zone_positions = self._calculate_zone_positions(L, W, zones, house_pos)
-        features = self._calculate_features(answers, L, W, house_pos)
-
+        zone_positions = self._make_zone_positions(L, W, zones, house_pos)
+        features = self._make_features(answers, L, W, house_pos, zone_positions)
         return {
-            'total_sqft': total_sqft,
-            'acres': acres,
-            'category': category,
-            'dimensions': {'L': L, 'W': W},
-            'zones': zones,
-            'zone_positions': zone_positions,
-            'house_position': house_pos,
+            'total_sqft': total_sqft, 'acres': acres, 'category': category,
+            'dimensions': {'L': L, 'W': W}, 'zones': zones,
+            'zone_positions': zone_positions, 'house_position': house_pos,
             'features': features,
             'water_source': answers.get('water_source', 'Borewell/Well'),
             'slope': answers.get('slope', 'Flat'),
             'livestock': answers.get('livestock', ['None']),
         }
 
-    # ── Feature placement ────────────────────────────────────────────────────
+    def _make_zone_positions(self, L, W, zones, house_pos):
+        pos = {}
+        if house_pos in ('South', 'Not built yet', 'Center'):
+            y = 0.0
+            for zid in ['z0', 'z1', 'z2', 'z3', 'z4']:
+                h = W * zones[zid]
+                pos[zid] = {'x': 0, 'y': y, 'width': L, 'height': h}
+                y += h
+        elif house_pos == 'North':
+            y = W
+            for zid in ['z0', 'z1', 'z2', 'z3', 'z4']:
+                h = W * zones[zid]
+                y -= h
+                pos[zid] = {'x': 0, 'y': y, 'width': L, 'height': h}
+        elif house_pos == 'East':
+            x = L
+            for zid in ['z0', 'z1', 'z2', 'z3', 'z4']:
+                w = L * zones[zid]
+                x -= w
+                pos[zid] = {'x': x, 'y': 0, 'width': w, 'height': W}
+        elif house_pos == 'West':
+            x = 0.0
+            for zid in ['z0', 'z1', 'z2', 'z3', 'z4']:
+                w = L * zones[zid]
+                pos[zid] = {'x': x, 'y': 0, 'width': w, 'height': W}
+                x += w
+        return pos
 
-    def _calculate_features(self, answers: Dict, L: float, W: float,
-                            house_pos: str) -> Dict[str, Any]:
-        features: Dict[str, Any] = {}
+    def _house_bbox(self, house_pos, L, W, zone_positions):
+        z0 = zone_positions.get('z0', {'x': 0, 'y': 0, 'width': L, 'height': W})
+        hw = z0['width'] * 0.55
+        hh = z0['height'] * 0.65
+        hx = z0['x'] + (z0['width'] - hw) / 2
+        hy = z0['y'] + (z0['height'] - hh) / 2
+        return hx, hy, hw, hh
+
+    def _clamp(self, val, lo, hi):
+        return max(lo, min(val, hi))
+
+    def _make_features(self, answers, L, W, house_pos, zone_positions):
+        features = {}
         livestock = answers.get('livestock', [])
-
-        # ── House anchor determines compass of surrounding features ──────
-        # We define four quadrants relative to house center
-        hx, hy, hw, hh = self._house_bbox(house_pos, L, W)
-        hcx, hcy = hx + hw / 2, hy + hh / 2   # house centre
-
-        # Helper: place a box at (frac_x, frac_y) of the FULL plot,
-        # but snap away from house centre if too close.
-        def place(fx, fy, fw, fh):
-            return {
-                'x':      max(0.0, min(L * fx, L - L * fw)),
-                'y':      max(0.0, min(W * fy, W - W * fh)),
-                'width':  L * fw,
-                'height': W * fh,
-            }
-
-        # ── Water source ─────────────────────────────────────────────────
         water = answers.get('water_source', '')
+
+        hx, hy, hw, hh = self._house_bbox(house_pos, L, W, zone_positions)
+        hcx = hx + hw / 2
+        hcy = hy + hh / 2
+
+        z1 = zone_positions.get('z1', {})
+        z3 = zone_positions.get('z3', {'x': 0, 'y': W*0.5, 'width': L, 'height': W*0.35})
+
+        # Solar â€” always south of house (low Y), inside plot
+        solar_w = self._clamp(hw * 0.45, L * 0.06, L * 0.18)
+        solar_h = self._clamp(hh * 0.35, W * 0.04, W * 0.10)
+        solar_y = self._clamp(hy - solar_h - W * 0.03, 0, W - solar_h)
+        solar_x = self._clamp(hcx - solar_w / 2, 0, L - solar_w)
+        features['solar'] = {'x': solar_x, 'y': solar_y, 'width': solar_w, 'height': solar_h}
+
+        # Greenhouse â€” east of house, same vertical band
+        gh_w = self._clamp(hw * 0.50, L * 0.08, L * 0.18)
+        gh_h = self._clamp(hh * 0.60, W * 0.08, W * 0.18)
+        gh_x = self._clamp(hx + hw + L * 0.025, 0, L - gh_w)
+        gh_y = self._clamp(hcy - gh_h / 2, 0, W - gh_h)
+        features['greenhouse'] = {'x': gh_x, 'y': gh_y, 'width': gh_w, 'height': gh_h}
+
+        # Water
         if 'Borewell' in water or 'Well' in water:
-            # NE corner — Vaastu-friendly, away from house
             features['well'] = {
-                'x': L * 0.86, 'y': W * 0.86,
-                'radius': min(L, W) * 0.022,
+                'x': self._clamp(L * 0.90, 0, L), 'y': self._clamp(W * 0.90, 0, W),
+                'radius': min(L, W) * 0.018,
             }
-        if 'Pond' in water or 'River' in water or 'Fish' in livestock:
+        if 'Pond' in water or 'River' in water:
             features['pond'] = {
-                'x': L * 0.18, 'y': W * 0.20,
-                'radius': min(L, W) * 0.09,
+                'x': z3['x'] + z3['width'] * 0.08,
+                'y': z3['y'] + z3['height'] * 0.15,
+                'radius': min(L, W) * 0.07,
             }
         if 'Rainwater' in water:
-            # Rainwater tank near house
-            features['rain_tank'] = place(0.70, 0.72, 0.07, 0.05)
+            features['rain_tank'] = {
+                'x': self._clamp(hx - L * 0.09, 0, L - L*0.06),
+                'y': hy, 'width': L * 0.06, 'height': hh * 0.35,
+            }
 
-        # ── Solar — south of house (max sun gain) ────────────────────────
-        # Placed below house centre in the plot (south = low Y in our grid)
-        solar_y_frac = max(0.02, (hy / W) - 0.18)
-        features['solar'] = {
-            'x':      hcx - L * 0.08,
-            'y':      W * solar_y_frac,
-            'width':  L * 0.16,
-            'height': W * 0.10,
-        }
-
-        # ── Greenhouse — east of house (morning sun) ──────────────────────
-        gh_x = min(L - L * 0.22, hx + hw + L * 0.04)
-        features['greenhouse'] = {
-            'x':      gh_x,
-            'y':      hcy - W * 0.08,
-            'width':  L * 0.20,
-            'height': W * 0.15,
-        }
-
-        # ── Compost — between kitchen garden and food forest ─────────────
-        features['compost'] = [
-            {'x': L * 0.08, 'y': W * 0.45, 'size': min(L, W) * 0.015},
-            {'x': L * 0.88, 'y': W * 0.58, 'size': min(L, W) * 0.015},
-        ]
-
-        # ── Swales ───────────────────────────────────────────────────────
-        slope = answers.get('slope', 'Flat')
-        if slope != 'Flat':
-            features['swales'] = [
-                {'y': W * 0.25, 'curve': 'sin'},
-                {'y': W * 0.50, 'curve': 'sin'},
-                {'y': W * 0.75, 'curve': 'sin'},
+        # Compost â€” in z1, far from house
+        if z1:
+            features['compost'] = [
+                {'x': self._clamp(z1['x'] + z1['width']*0.07, 0, L),
+                 'y': self._clamp(z1['y'] + z1['height']*0.50, 0, W),
+                 'size': min(L, W) * 0.016},
+                {'x': self._clamp(z1['x'] + z1['width']*0.88, 0, L),
+                 'y': self._clamp(z1['y'] + z1['height']*0.50, 0, W),
+                 'size': min(L, W) * 0.016},
             ]
 
-        # ── Livestock housing — each animal type separately ───────────────
-        # Placed in Zone 3 area (upper portion of plot, away from house)
-        livestock_zone_x = L * 0.60   # right side of plot
-        livestock_zone_y = W * 0.72   # top portion
-        offset = 0                    # cascade vertically
+        # Swales
+        slope = answers.get('slope', 'Flat')
+        if slope != 'Flat' and z3:
+            features['swales'] = [
+                {'y': z3['y'] + z3['height'] * 0.30, 'curve': 'sin'},
+                {'y': z3['y'] + z3['height'] * 0.65, 'curve': 'sin'},
+            ]
 
-        if 'Goats' in livestock:
-            features['goat_shed'] = {
-                'x':      livestock_zone_x,
-                'y':      livestock_zone_y - offset,
-                'width':  L * 0.18,
-                'height': W * 0.12,
-                'label':  '🐐 Goat Shed',
-            }
-            offset += W * 0.14
+        # Livestock grid in right portion of Z3
+        grid_x0 = z3['x'] + z3['width'] * 0.45
+        grid_y0 = z3['y'] + z3['height'] * 0.05
+        grid_w  = z3['width'] * 0.52
+        grid_h  = z3['height'] * 0.90
 
-        if 'Chickens' in livestock:
-            features['chicken_coop'] = {
-                'x':      livestock_zone_x,
-                'y':      livestock_zone_y - offset,
-                'width':  L * 0.12,
-                'height': W * 0.10,
-                'label':  '🐔 Chicken Coop',
-            }
-            offset += W * 0.12
+        animal_keys = []
+        if 'Goats'    in livestock: animal_keys.append('goat_shed')
+        if 'Chickens' in livestock: animal_keys.append('chicken_coop')
+        if 'Pigs'     in livestock: animal_keys.append('piggery')
+        if 'Cows'     in livestock: animal_keys.append('cow_shed')
+        if 'Bees'     in livestock: animal_keys.append('bee_hives')
 
-        if 'Pigs' in livestock:
-            features['piggery'] = {
-                'x':      livestock_zone_x + L * 0.20,
-                'y':      livestock_zone_y - offset,
-                'width':  L * 0.16,
-                'height': W * 0.14,
-                'label':  '🐷 Piggery',
-            }
-            offset += W * 0.16
+        if animal_keys:
+            cols = 2
+            rows = (len(animal_keys) + cols - 1) // cols
+            gap = 4
+            cell_w = (grid_w - (cols + 1) * gap) / cols
+            cell_h = (grid_h - (rows + 1) * gap) / rows
 
-        if 'Cows' in livestock:
-            features['cow_shed'] = {
-                'x':      livestock_zone_x + L * 0.20,
-                'y':      livestock_zone_y,
-                'width':  L * 0.18,
-                'height': W * 0.16,
-                'label':  '🐄 Cow Shed',
+            size_fracs = {
+                'goat_shed':   (0.85, 0.72),
+                'chicken_coop':(0.72, 0.65),
+                'piggery':     (0.85, 0.78),
+                'cow_shed':    (0.90, 0.82),
+                'bee_hives':   (0.58, 0.50),
             }
+
+            for idx, key in enumerate(animal_keys):
+                col = idx % cols
+                row = idx // cols
+                cx = grid_x0 + gap + col * (cell_w + gap)
+                cy = grid_y0 + gap + row * (cell_h + gap)
+                fw, fh = size_fracs.get(key, (0.80, 0.70))
+                features[key] = {
+                    'x': self._clamp(cx, 0, L - cell_w * fw),
+                    'y': self._clamp(cy, 0, W - cell_h * fh),
+                    'width':  cell_w * fw,
+                    'height': cell_h * fh,
+                }
 
         if 'Fish' in livestock:
-            # Fish pond — if not already added from water source
             if 'pond' not in features:
                 features['pond'] = {
-                    'x': L * 0.18, 'y': W * 0.20,
-                    'radius': min(L, W) * 0.09,
+                    'x': z3['x'] + z3['width'] * 0.08,
+                    'y': z3['y'] + z3['height'] * 0.15,
+                    'radius': min(L, W) * 0.07,
                 }
             features['fish_tanks'] = {
-                'x':      L * 0.05,
-                'y':      W * 0.65,
-                'width':  L * 0.10,
-                'height': W * 0.08,
-                'label':  '🐟 Fish Tanks',
+                'x': self._clamp(z3['x'] + z3['width'] * 0.05, 0, L - z3['width']*0.14),
+                'y': self._clamp(z3['y'] + z3['height'] * 0.55, 0, W - z3['height']*0.25),
+                'width': z3['width'] * 0.13,
+                'height': z3['height'] * 0.28,
             }
 
-        if 'Bees' in livestock:
-            features['bee_hives'] = {
-                'x':      L * 0.05,
-                'y':      W * 0.55,
-                'width':  L * 0.06,
-                'height': W * 0.05,
-                'label':  '🐝 Bee Hives',
-            }
-
-        # ── Legacy single 'livestock' key for 3D backward compat ─────────
-        # Pick first animal shed as the "main" livestock feature
         for k in ('goat_shed', 'chicken_coop', 'piggery', 'cow_shed'):
             if k in features:
                 features['livestock'] = features[k]
                 break
 
         return features
-
-    # ── House bounding-box helper ────────────────────────────────────────────
-    @staticmethod
-    def _house_bbox(pos: str, L: float, W: float):
-        positions = {
-            'North':       (L*0.30, W*0.82, L*0.40, W*0.12),
-            'South':       (L*0.30, W*0.06, L*0.40, W*0.12),
-            'East':        (L*0.75, W*0.35, L*0.20, W*0.30),
-            'West':        (L*0.05, W*0.35, L*0.20, W*0.30),
-            'Center':      (L*0.35, W*0.40, L*0.30, W*0.20),
-            'Not built yet': (L*0.35, W*0.40, L*0.30, W*0.20),
-        }
-        return positions.get(pos, positions['Center'])
-
-    # ── Zone positions ───────────────────────────────────────────────────────
-    def _calculate_zone_positions(self, L: float, W: float,
-                                   zones: Dict, house_pos: str) -> Dict:
-        positions = {}
-
-        if house_pos in ('North', 'South'):
-            y = 0.0
-            order = (['z4', 'z3', 'z2', 'z1', 'z0'] if house_pos == 'North'
-                     else ['z0', 'z1', 'z2', 'z3', 'z4'])
-            for zone in order:
-                height = W * zones[zone]
-                positions[zone] = {'x': 0, 'y': y, 'width': L, 'height': height}
-                y += height
-
-        elif house_pos in ('East', 'West'):
-            x = 0.0
-            order = (['z0', 'z1', 'z2', 'z3', 'z4'] if house_pos == 'East'
-                     else ['z4', 'z3', 'z2', 'z1', 'z0'])
-            for zone in order:
-                width = L * zones[zone]
-                positions[zone] = {'x': x, 'y': 0, 'width': width, 'height': W}
-                x += width
-
-        else:  # Center / Not built yet
-            positions['z0'] = {'x': L*0.35, 'y': W*0.40, 'width': L*0.30, 'height': W*0.20}
-            positions['z1'] = {'x': L*0.20, 'y': W*0.26, 'width': L*0.60, 'height': W*0.14}
-            positions['z2'] = {'x': L*0.08, 'y': W*0.08, 'width': L*0.84, 'height': W*0.18}
-            positions['z3'] = {'x': 0,      'y': W*0.60, 'width': L,       'height': W*0.28}
-            positions['z4'] = {'x': 0,      'y': W*0.88, 'width': L,       'height': W*0.12}
-
-        return positions
-
-                    
