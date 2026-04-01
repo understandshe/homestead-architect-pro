@@ -12,48 +12,48 @@ class UserInterview:
     QUESTIONS = [
         {
             "id": "location",
-            "question": "📍 Where is your homestead located?",
+            "question": "ðŸ“ Where is your homestead located?",
             "type": "text",
             "placeholder": "City, Country (e.g., Austin, USA or Pune, India)",
             "help": "We use this to determine climate, rainfall, and growing season"
         },
         {
             "id": "dimensions",
-            "question": "📐 What are your plot dimensions?",
+            "question": "ðŸ“ What are your plot dimensions?",
             "type": "dimensions",
             "help": "Length and width in feet or meters"
         },
         {
             "id": "house_position",
-            "question": "🏠 Where is/will be your house located?",
+            "question": "ðŸ  Where is/will be your house located?",
             "type": "select",
             "options": ["North", "South", "East", "West", "Center", "Not built yet"],
             "help": "Affects sun exposure and zone placement"
         },
         {
             "id": "slope",
-            "question": "⛰️ What is the slope direction?",
+            "question": "â›°ï¸ What is the slope direction?",
             "type": "select",
             "options": ["Flat", "North", "South", "East", "West", "Mixed/Undulating"],
             "help": "Critical for water management and drainage"
         },
         {
             "id": "water_source",
-            "question": "💧 What is your primary water source?",
+            "question": "ðŸ’§ What is your primary water source?",
             "type": "select",
             "options": ["Borewell/Well", "Municipal Supply", "Rainwater", "River/Pond", "None yet"],
             "help": "Determines irrigation system design"
         },
         {
             "id": "livestock",
-            "question": "🐐 Which animals do you plan to keep?",
+            "question": "ðŸ Which animals do you plan to keep?",
             "type": "multiselect",
             "options": ["None", "Chickens", "Goats", "Pigs", "Cows", "Bees", "Fish"],
             "help": "Select all that apply"
         },
         {
             "id": "budget",
-            "question": "💰 What is your budget range?",
+            "question": "ðŸ’° What is your budget range?",
             "type": "select",
             "options": ["Under $5,000", "$5,000 - $25,000", "$25,000 - $100,000", "$100,000+", "Not sure"],
             "help": "Helps us recommend appropriate solutions"
@@ -64,7 +64,7 @@ class UserInterview:
         """Run the interview and return answers"""
         answers = {}
         
-        st.subheader("🎯 Answer 7 Simple Questions")
+        st.subheader("ðŸŽ¯ Answer 7 Simple Questions")
         st.caption("Our AI will design your perfect homestead based on these answers")
         
         with st.form("homestead_interview"):
@@ -72,14 +72,14 @@ class UserInterview:
                 answers[q['id']] = self._render_question(q)
             
             submitted = st.form_submit_button(
-                "🚀 Generate My Homestead Design",
+                "ðŸš€ Generate My Homestead Design",
                 use_container_width=True
             )
         
         if submitted:
             # Validate
             if not answers.get('location'):
-                st.error("❌ Please enter your location")
+                st.error("âŒ Please enter your location")
                 return None
             
             # Store project name
