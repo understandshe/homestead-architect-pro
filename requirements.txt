@@ -4,20 +4,14 @@ numpy==1.24.3
 pillow==10.0.0
 pandas==2.0.3
 
-# Visualization - Matplotlib stable
+# Visualization
 matplotlib==3.7.2
 
-# PDF Generation - ReportLab only (fpdf2 removed)
+# PDF Generation - ReportLab only
 reportlab==4.0.4
 
 # Data handling
 requests==2.31.0
-
-# Optional - Remove problematic ones
-# plotly==5.15.0  ← REMOVE (optional)
-# pydeck==0.8.0   ← REMOVE (optional)
-# trimesh==3.22.1 ← REMOVE (optional)
-# pyglet==2.0.7   ← REMOVE (optional)
 
 # Utilities
 python-dotenv==1.0.0
