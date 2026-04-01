@@ -1,12 +1,11 @@
 """
-3D Visualization Engine — ULTIMATE PREMIUM EDITION
+3D Visualization Engine — FIXED
 Homestead Architect Pro 2026
 
-Fixes & Enhancements:
-  - Realistic House: Added windows, door, and textured chimney (Not a box anymore!).
-  - Smart Roads: Added a proper road network connecting all zones (Grey paths).
-  - Anti-Collision Logic: Automated spacing to prevent features from overlapping.
-  - Zero-Feature Loss: Kept all 22 pages of your hard work intact.
+Fixes:
+  - All livestock types drawn individually (goat, chicken, pig, cow, fish, bees)
+  - Features positioned correctly matching layout_engine output
+  - Proper 3D solids for every feature
 """
 
 import plotly.graph_objects as go
@@ -14,29 +13,31 @@ import plotly.io as pio
 import numpy as np
 from typing import Dict, Any, List
 
+
 class Visualizer3D:
-    """Creates interactive 3D homestead models with smart road networks."""
+    """Creates interactive 3D homestead models using Plotly."""
 
     ZONE_COLORS = {
-        'z0': '#F5F5DC', 'z1': '#90EE90', 'z2': '#228B22',
-        'z3': '#F0E68C', 'z4': '#DDA0DD',
+        'z0': '#F5F5DC',
+        'z1': '#90EE90',
+        'z2': '#228B22',
+        'z3': '#F0E68C',
+        'z4': '#DDA0DD',
     }
     ZONE_NAMES = {
-        'z0': 'Zone 0 – Residential', 'z1': 'Zone 1 – Kitchen Garden',
-        'z2': 'Zone 2 – Food Forest', 'z3': 'Zone 3 – Pasture / Crops',
+        'z0': 'Zone 0 – Residential',
+        'z1': 'Zone 1 – Kitchen Garden',
+        'z2': 'Zone 2 – Food Forest',
+        'z3': 'Zone 3 – Pasture / Crops',
         'z4': 'Zone 4 – Buffer Zone',
     }
 
     def create(self, layout: Dict[str, Any]) -> go.Figure:
         fig = go.Figure()
 
-        # Added Smart Spacing to prevent collision before rendering
-        layout = self._apply_anti_collision(layout)
-
         self._add_terrain(fig, layout)
         self._add_zones_3d(fig, layout)
-        self._add_road_network(fig, layout) # NEW: Smart Roads
-        self._add_house_3d(fig, layout)      # UPGRADED: Not a box!
+        self._add_house_3d(fig, layout)
         self._add_features_3d(fig, layout)
         self._add_all_livestock_3d(fig, layout)
         self._add_trees_3d(fig, layout)
@@ -47,125 +48,301 @@ class Visualizer3D:
 
         fig.update_layout(
             title=dict(
-                text=f"🏠 Premium 3D Homestead — {acres:.2f} acres ({int(L)} × {int(W)} ft)",
-                font=dict(size=17, color='#2E7D32', family='Arial'), x=0.5,
+                text=f"🏠 3D Homestead — {acres:.2f} acres ({int(L)} × {int(W)} ft)",
+                font=dict(size=17, color='#2E7D32', family='Arial'),
+                x=0.5,
             ),
             scene=dict(
-                xaxis_title='Length (ft)', yaxis_title='Width (ft)', zaxis_title='Height (ft)',
-                aspectmode='data', bgcolor='#D0E8F5',
-                camera=dict(eye=dict(x=1.5, y=-1.5, z=1.2)),
+                xaxis_title='Length (ft)',
+                yaxis_title='Width (ft)',
+                zaxis_title='Height (ft)',
+                aspectmode='data',
+                bgcolor='#D0E8F5',
+                camera=dict(
+                    eye=dict(x=1.4, y=-1.4, z=0.9),
+                    up=dict(x=0, y=0, z=1),
+                ),
                 xaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
                 yaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
                 zaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
             ),
-            legend=dict(x=0.01, y=0.99, bgcolor='rgba(255,255,255,0.85)'),
-            paper_bgcolor='#EAF4FB', margin=dict(l=0, r=0, t=55, b=0),
-            width=1000, height=750,
+            legend=dict(
+                x=0.01, y=0.99,
+                bgcolor='rgba(255,255,255,0.85)',
+                bordercolor='#AAAAAA', borderwidth=1,
+                font=dict(size=11),
+            ),
+            paper_bgcolor='#EAF4FB',
+            margin=dict(l=0, r=0, t=55, b=0),
+            width=950, height=670,
         )
         return fig
 
-    def _apply_anti_collision(self, layout: Dict[str, Any]) -> Dict[str, Any]:
-        """Prevents features from overlapping by applying coordinate offsets."""
-        features = layout.get('features', {})
-        house_x = layout.get('house_x', layout['dimensions']['L'] * 0.4)
-        
-        # Simple Logic: Push features at least 15ft away from house and each other
-        for key, f in features.items():
-            if 'x' in f and 'y' in f:
-                dist = np.sqrt((f['x'] - house_x)**2)
-                if dist < 20: # Collision detected
-                    f['x'] += 25 # Move 25ft to the right
-        return layout
+    # ── Geometry primitives ──────────────────────────────────────────────────────
 
-    def _add_road_network(self, fig, layout):
-        """Adds visible grey paths connecting the house to all zones."""
-        L, W = layout['dimensions']['L'], layout['dimensions']['W']
-        # Main Road (Central Axis)
-        fig.add_trace(go.Mesh3d(
-            x=[L*0.48, L*0.52, L*0.52, L*0.48, L*0.48, L*0.52, L*0.52, L*0.48],
-            y=[0, 0, W, W, 0, 0, W, W],
-            z=[0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2],
-            color='#757575', name='Main Access Road', opacity=0.9, showlegend=True
+    @staticmethod
+    def _box_mesh(x0, y0, z0, x1, y1, z1, color, name,
+                  opacity=0.85, show_legend=True) -> go.Mesh3d:
+        vx = [x0, x1, x1, x0,  x0, x1, x1, x0]
+        vy = [y0, y0, y1, y1,  y0, y0, y1, y1]
+        vz = [z0, z0, z0, z0,  z1, z1, z1, z1]
+        fi = [0, 0,  4, 4,  0, 0,  2, 2,  0, 0,  1, 1]
+        fj = [1, 2,  5, 6,  1, 5,  3, 7,  3, 7,  2, 6]
+        fk = [2, 3,  6, 7,  5, 4,  7, 6,  7, 4,  6, 5]
+        return go.Mesh3d(
+            x=vx, y=vy, z=vz, i=fi, j=fj, k=fk,
+            color=color, opacity=opacity, name=name,
+            showlegend=show_legend, flatshading=True,
+            lighting=dict(ambient=0.65, diffuse=0.9, specular=0.2,
+                          roughness=0.6, fresnel=0.1),
+        )
+
+    @staticmethod
+    def _hip_roof(x0, y0, x1, y1, base_z, apex_z, color,
+                  name='Roof') -> go.Mesh3d:
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        vx = [x0, x1, x1, x0, cx]
+        vy = [y0, y0, y1, y1, cy]
+        vz = [base_z] * 4 + [apex_z]
+        fi = [0, 1, 2, 3]
+        fj = [1, 2, 3, 0]
+        fk = [4, 4, 4, 4]
+        return go.Mesh3d(
+            x=vx, y=vy, z=vz, i=fi, j=fj, k=fk,
+            color=color, opacity=0.97, name=name,
+            showlegend=False, flatshading=True,
+        )
+
+    @staticmethod
+    def _cone_tree(tx, ty, trunk_bot_z=1.5, trunk_top_z=7.0,
+                   canopy_bot_z=7.0, canopy_top_z=18.0,
+                   canopy_r=7.5, trunk_r=1.2,
+                   color_canopy='#2E7D32', label='',
+                   show_legend=False) -> List:
+        traces = []
+        n = 18
+        theta_t = np.linspace(0, 2*np.pi, n)
+        z_t = np.array([trunk_bot_z, trunk_top_z])
+        T_grid, Z_grid = np.meshgrid(theta_t, z_t)
+        traces.append(go.Surface(
+            x=tx + trunk_r * np.cos(T_grid),
+            y=ty + trunk_r * np.sin(T_grid),
+            z=Z_grid,
+            colorscale=[[0, '#6D4C41'], [1, '#8D6E63']],
+            showscale=False, showlegend=False, opacity=0.95, name='Trunk',
         ))
+        theta_c = np.linspace(0, 2*np.pi, n, endpoint=False)
+        vx = list(tx + canopy_r * np.cos(theta_c)) + [tx]
+        vy = list(ty + canopy_r * np.sin(theta_c)) + [ty]
+        vz = [canopy_bot_z] * n + [canopy_top_z]
+        apex = n
+        traces.append(go.Mesh3d(
+            x=vx, y=vy, z=vz,
+            i=list(range(n)),
+            j=[(k+1) % n for k in range(n)],
+            k=[apex] * n,
+            color=color_canopy, opacity=0.88,
+            name=label if label else 'Tree',
+            showlegend=show_legend, flatshading=True,
+        ))
+        return traces
 
-    def _add_house_3d(self, fig, layout):
-        """Upgraded Realistic House with windows, door, and chimney."""
-        L, W = layout['dimensions']['L'], layout['dimensions']['W']
-        hx, hy, hw, hd = L*0.4, W*0.1, L*0.15, W*0.1
-        wall_h, roof_h = 12.0, 8.0
-        
-        # Main Walls
-        fig.add_trace(self._box_mesh(hx, hy, 0.2, hx+hw, hy+hd, wall_h, '#A1887F', 'Main House'))
-        
-        # Door (Dark Wood)
-        fig.add_trace(self._box_mesh(hx+(hw*0.4), hy-0.5, 0.2, hx+(hw*0.6), hy+0.5, 7.0, '#3E2723', 'Door', show_legend=False))
-        
-        # Windows (Light Blue)
-        for wx in [hx+hw*0.15, hx+hw*0.7]:
-            fig.add_trace(self._box_mesh(wx, hy-0.5, 4.0, wx+hw*0.15, hy+0.5, 7.5, '#B3E5FC', 'Window', show_legend=False))
-            
-        # Chimney
-        fig.add_trace(self._box_mesh(hx+hw*0.7, hy+hd*0.6, wall_h, hx+hw*0.8, hy+hd*0.8, wall_h+12, '#5D4037', 'Chimney', show_legend=False))
-        
-        # Roof
-        fig.add_trace(self._hip_roof(hx-2, hy-2, hx+hw+2, hy+hd+2, wall_h, wall_h+roof_h, '#4E342E'))
-
-    def _add_features_3d(self, fig, layout):
-        # ... (Your existing pond, well, solar, greenhouse code goes here) ...
-        # I have kept it exactly as you wrote, just added offset logic in _apply_anti_collision
-        features = layout.get('features', {})
-        if 'pond' in features:
-            f = features['pond']
-            r = f['radius']
-            tg = np.linspace(0, 2*np.pi, 36)
-            rg = np.linspace(0, r, 10)
-            R, T = np.meshgrid(rg, tg)
-            fig.add_trace(go.Surface(
-                x=f['x'] + R * np.cos(T), y=f['y'] + R * np.sin(T), z=np.full_like(R, 0.3),
-                colorscale=[[0, '#0288D1'], [1, '#4FC3F7']], showscale=False, name='Fish Pond'
-            ))
-
-    def _add_all_livestock_3d(self, fig, layout):
-        # Keep your 6 types of sheds but with better textures
-        features = layout.get('features', {})
-        livestock_config = {
-            'goat_shed': ('#FFCCBC', '#4E342E', 'Goat Shed', 8),
-            'chicken_coop': ('#FFF9C4', '#F57F17', 'Chicken Coop', 6),
-            'piggery': ('#F8BBD0', '#880E4F', 'Piggery', 7),
-            'cow_shed': ('#D7CCC8', '#5D4037', 'Cow Shed', 10),
-        }
-        for key, (w_col, r_col, lbl, h) in livestock_config.items():
-            if key in features:
-                f = features[key]
-                fig.add_trace(self._box_mesh(f['x'], f['y'], 0.2, f['x']+f['width'], f['y']+f['height'], h, w_col, lbl))
-                fig.add_trace(self._hip_roof(f['x'], f['y'], f['x']+f['width'], f['y']+f['height'], h, h+4, r_col))
-
-    def _box_mesh(self, x0, y0, z0, x1, y1, z1, color, name, opacity=1.0, show_legend=True):
-        vx = [x0, x1, x1, x0, x0, x1, x1, x0]
-        vy = [y0, y0, y1, y1, y0, y0, y1, y1]
-        vz = [z0, z0, z0, z0, z1, z1, z1, z1]
-        return go.Mesh3d(x=vx, y=vy, z=vz, i=[0,0,4,4,0,0,2,2,0,0,1,1], j=[1,2,5,6,1,5,3,7,3,7,2,6], k=[2,3,6,7,5,4,7,6,7,4,6,5],
-                         color=color, opacity=opacity, name=name, showlegend=show_legend, flatshading=True)
-
-    def _hip_roof(self, x0, y0, x1, y1, base_z, apex_z, color):
-        cx, cy = (x0+x1)/2, (y0+y1)/2
-        vx, vy, vz = [x0, x1, x1, x0, cx], [y0, y0, y1, y1, cy], [base_z, base_z, base_z, base_z, apex_z]
-        return go.Mesh3d(x=vx, y=vy, z=vz, i=[0,1,2,3], j=[1,2,3,0], k=[4,4,4,4], color=color, opacity=1.0, flatshading=True)
+    # ── Scene layers ─────────────────────────────────────────────────────────────
 
     def _add_terrain(self, fig, layout):
         L, W = layout['dimensions']['L'], layout['dimensions']['W']
-        x, y = np.linspace(0, L, 20), np.linspace(0, W, 20)
+        x = np.linspace(0, L, 30)
+        y = np.linspace(0, W, 30)
         X, Y = np.meshgrid(x, y)
+        slope = layout.get('slope', 'Flat')
         Z = np.zeros_like(X)
-        fig.add_trace(go.Surface(x=X, y=Y, z=Z, colorscale='Greens', showscale=False, opacity=0.6))
+        if slope == 'South':   Z = Y * 0.03
+        elif slope == 'North': Z = (W - Y) * 0.03
+        elif slope == 'East':  Z = X * 0.03
+        elif slope == 'West':  Z = (L - X) * 0.03
+        fig.add_trace(go.Surface(
+            x=X, y=Y, z=Z,
+            colorscale=[[0, '#81C784'], [0.5, '#4CAF50'], [1, '#2E7D32']],
+            showscale=False, opacity=0.82,
+            name='Terrain', showlegend=True,
+            lighting=dict(ambient=0.7, diffuse=0.85),
+        ))
 
     def _add_zones_3d(self, fig, layout):
-        for zid, pos in layout.get('zone_positions', {}).items():
-            fig.add_trace(self._box_mesh(pos['x'], pos['y'], 0, pos['x']+pos['width'], pos['y']+pos['height'], 0.1, self.ZONE_COLORS.get(zid, '#CCC'), self.ZONE_NAMES.get(zid, zid), opacity=0.3))
+        for zone_id, pos in layout.get('zone_positions', {}).items():
+            fig.add_trace(self._box_mesh(
+                pos['x'], pos['y'], 0,
+                pos['x'] + pos['width'], pos['y'] + pos['height'], 1.5,
+                color=self.ZONE_COLORS.get(zone_id, '#CCCCCC'),
+                name=self.ZONE_NAMES.get(zone_id, zone_id),
+                opacity=0.40,
+            ))
+
+    def _add_house_3d(self, fig, layout):
+        L, W = layout['dimensions']['L'], layout['dimensions']['W']
+        pos = layout.get('house_position', 'Center')
+        positions = {
+            'North':        (L*0.30, W*0.82, L*0.40, W*0.12),
+            'South':        (L*0.30, W*0.06, L*0.40, W*0.12),
+            'East':         (L*0.75, W*0.35, L*0.20, W*0.30),
+            'West':         (L*0.05, W*0.35, L*0.20, W*0.30),
+            'Center':       (L*0.35, W*0.40, L*0.30, W*0.20),
+            'Not built yet':(L*0.35, W*0.40, L*0.30, W*0.20),
+        }
+        hx, hy, hw, hd = positions.get(pos, positions['Center'])
+        wall_h = 10.0
+        base_z = 1.5
+        roof_bot = base_z + wall_h
+        roof_top = roof_bot + min(hw, hd) * 0.42
+
+        fig.add_trace(self._box_mesh(
+            hx, hy, base_z, hx+hw, hy+hd, roof_bot,
+            color='#8D6E63', name='House', opacity=0.96,
+        ))
+        fig.add_trace(self._hip_roof(
+            hx, hy, hx+hw, hy+hd,
+            base_z=roof_bot, apex_z=roof_top,
+            color='#4E342E',
+        ))
+
+    def _add_features_3d(self, fig, layout):
+        features = layout.get('features', {})
+
+        # Pond
+        if 'pond' in features:
+            f = features['pond']
+            r = f['radius']
+            rg = np.linspace(0, r, 10)
+            tg = np.linspace(0, 2*np.pi, 36)
+            R, T = np.meshgrid(rg, tg)
+            fig.add_trace(go.Surface(
+                x=f['x'] + R * np.cos(T) * (1 + 0.1 * np.sin(3*T)),
+                y=f['y'] + R * np.sin(T) * (1 + 0.1 * np.cos(2*T)),
+                z=np.full_like(R, -0.8),
+                colorscale=[[0, '#4FC3F7'], [1, '#0288D1']],
+                showscale=False, opacity=0.85,
+                name='Pond / Fish', showlegend=True,
+            ))
+
+        # Borewell
+        if 'well' in features:
+            f = features['well']
+            rw = f.get('radius', 4)
+            theta_w = np.linspace(0, 2*np.pi, 24)
+            z_w = np.array([1.5, 5.0])
+            Tw, Zw = np.meshgrid(theta_w, z_w)
+            fig.add_trace(go.Surface(
+                x=f['x'] + rw * np.cos(Tw),
+                y=f['y'] + rw * np.sin(Tw),
+                z=Zw,
+                colorscale=[[0, '#546E7A'], [1, '#90A4AE']],
+                showscale=False, opacity=0.95,
+                name='Borewell', showlegend=True,
+            ))
+
+        # Solar panels
+        if 'solar' in features:
+            f = features['solar']
+            pw, ph = f['width'] / 3, f['height'] / 2
+            for col in range(3):
+                for row in range(2):
+                    px = f['x'] + col * pw + 1
+                    py = f['y'] + row * ph + 1
+                    fig.add_trace(self._box_mesh(
+                        px, py, 4.0,
+                        px + pw - 2, py + ph - 2, 4.4,
+                        color='#1565C0',
+                        name='Solar Panels' if (col == 0 and row == 0) else '',
+                        opacity=0.95,
+                        show_legend=(col == 0 and row == 0),
+                    ))
+
+        # Greenhouse
+        if 'greenhouse' in features:
+            f = features['greenhouse']
+            gh_h = 8.0
+            base_z = 1.5
+            fig.add_trace(self._box_mesh(
+                f['x'], f['y'], base_z,
+                f['x']+f['width'], f['y']+f['height'], base_z+gh_h,
+                color='#E0F2F1', name='Greenhouse', opacity=0.35,
+            ))
+            fig.add_trace(self._hip_roof(
+                f['x'], f['y'], f['x']+f['width'], f['y']+f['height'],
+                base_z=base_z+gh_h,
+                apex_z=base_z+gh_h+f['width']*0.28,
+                color='#80CBC4', name='GH Roof',
+            ))
+
+        # Rain tank
+        if 'rain_tank' in features:
+            f = features['rain_tank']
+            fig.add_trace(self._box_mesh(
+                f['x'], f['y'], 1.5,
+                f['x']+f['width'], f['y']+f['height'], 7.0,
+                color='#4FC3F7', name='Rain Tank', opacity=0.80,
+            ))
+
+    def _add_all_livestock_3d(self, fig, layout):
+        """Draw each livestock type as a distinct 3D shed."""
+        features = layout.get('features', {})
+
+        livestock_config = {
+            'goat_shed':   ('#FFCCBC', '#4E342E', 'Goat Shed',    7.0),
+            'chicken_coop':('#FFF9C4', '#F57F17', 'Chicken Coop', 5.0),
+            'piggery':     ('#F8BBD0', '#880E4F', 'Piggery',      6.0),
+            'cow_shed':    ('#D7CCC8', '#5D4037', 'Cow Shed',     9.0),
+            'fish_tanks':  ('#B3E5FC', '#0288D1', 'Fish Tanks',   3.0),
+            'bee_hives':   ('#FFF176', '#F9A825', 'Bee Hives',    4.0),
+        }
+
+        for key, (wall_color, roof_color, label, shed_h) in livestock_config.items():
+            if key not in features:
+                continue
+            f = features[key]
+            base_z = 1.5
+            roof_bot = base_z + shed_h
+            roof_top = roof_bot + f['width'] * 0.25
+
+            fig.add_trace(self._box_mesh(
+                f['x'], f['y'], base_z,
+                f['x']+f['width'], f['y']+f['height'], roof_bot,
+                color=wall_color, name=label, opacity=0.90,
+            ))
+            fig.add_trace(self._hip_roof(
+                f['x'], f['y'], f['x']+f['width'], f['y']+f['height'],
+                base_z=roof_bot, apex_z=roof_top,
+                color=roof_color, name=f'{label} Roof',
+            ))
 
     def _add_trees_3d(self, fig, layout):
-        # Keep your cone tree logic but ensure they don't land in the pond!
-        pass 
+        zone_pos = layout.get('zone_positions', {})
+        if 'z2' not in zone_pos:
+            return
+        z = zone_pos['z2']
+        rel_positions = [
+            (0.18, 0.30), (0.48, 0.58), (0.78, 0.38),
+            (0.28, 0.72), (0.68, 0.20), (0.58, 0.82),
+        ]
+        canopy_colors = ['#2E7D32', '#388E3C', '#1B5E20',
+                         '#43A047', '#66BB6A', '#33691E']
+        tree_labels = ['Mango', 'Coconut', 'Jackfruit',
+                       'Banana', 'Guava', 'Papaya']
 
-    def export_as_html(self, fig: go.Figure, filename: str = "premium_homestead_3d.html"):
-        pio.write_html(fig, file=filename, include_plotlyjs='cdn')
+        for idx, (rx, ry) in enumerate(rel_positions):
+            tx = z['x'] + rx * z['width']
+            ty = z['y'] + ry * z['height']
+            for trace in self._cone_tree(
+                tx, ty,
+                color_canopy=canopy_colors[idx % len(canopy_colors)],
+                label=tree_labels[idx % len(tree_labels)],
+                show_legend=(idx == 0),
+            ):
+                fig.add_trace(trace)
+
+    # ── HTML Export Function ────────────────────────────────────────────────────
+    
+    def export_as_html(self, fig: go.Figure, filename: str = "homestead_3d.html"):
+        """Exports the 3D model into a standalone, rotatable HTML file."""
+        pio.write_html(fig, file=filename, auto_open=False, include_plotlyjs='cdn')
+        print(f"Interactive 3D model saved to: {filename}")
