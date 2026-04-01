@@ -1,5 +1,5 @@
 """
-3D Visualization Engine â€” FIXED
+3D Visualization Engine — FIXED
 Homestead Architect Pro 2026
 
 Fixes:
@@ -9,6 +9,7 @@ Fixes:
 """
 
 import plotly.graph_objects as go
+import plotly.io as pio
 import numpy as np
 from typing import Dict, Any, List
 
@@ -24,11 +25,11 @@ class Visualizer3D:
         'z4': '#DDA0DD',
     }
     ZONE_NAMES = {
-        'z0': 'Zone 0 â€“ Residential',
-        'z1': 'Zone 1 â€“ Kitchen Garden',
-        'z2': 'Zone 2 â€“ Food Forest',
-        'z3': 'Zone 3 â€“ Pasture / Crops',
-        'z4': 'Zone 4 â€“ Buffer Zone',
+        'z0': 'Zone 0 – Residential',
+        'z1': 'Zone 1 – Kitchen Garden',
+        'z2': 'Zone 2 – Food Forest',
+        'z3': 'Zone 3 – Pasture / Crops',
+        'z4': 'Zone 4 – Buffer Zone',
     }
 
     def create(self, layout: Dict[str, Any]) -> go.Figure:
@@ -47,7 +48,7 @@ class Visualizer3D:
 
         fig.update_layout(
             title=dict(
-                text=f"ðŸ¡ 3D Homestead â€” {acres:.2f} acres ({int(L)} Ã— {int(W)} ft)",
+                text=f"🏠 3D Homestead — {acres:.2f} acres ({int(L)} × {int(W)} ft)",
                 font=dict(size=17, color='#2E7D32', family='Arial'),
                 x=0.5,
             ),
@@ -77,7 +78,7 @@ class Visualizer3D:
         )
         return fig
 
-    # â”€â”€ Geometry primitives â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Geometry primitives ──────────────────────────────────────────────────────
 
     @staticmethod
     def _box_mesh(x0, y0, z0, x1, y1, z1, color, name,
@@ -146,7 +147,7 @@ class Visualizer3D:
         ))
         return traces
 
-    # â”€â”€ Scene layers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Scene layers ─────────────────────────────────────────────────────────────
 
     def _add_terrain(self, fig, layout):
         L, W = layout['dimensions']['L'], layout['dimensions']['W']
@@ -338,3 +339,10 @@ class Visualizer3D:
                 show_legend=(idx == 0),
             ):
                 fig.add_trace(trace)
+
+    # ── HTML Export Function ────────────────────────────────────────────────────
+    
+    def export_as_html(self, fig: go.Figure, filename: str = "homestead_3d.html"):
+        """Exports the 3D model into a standalone, rotatable HTML file."""
+        pio.write_html(fig, file=filename, auto_open=False, include_plotlyjs='cdn')
+        print(f"Interactive 3D model saved to: {filename}")
