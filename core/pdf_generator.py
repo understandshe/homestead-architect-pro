@@ -1,20 +1,19 @@
 """
-PDF Report Generator
-Professional reports with affiliate products
+PDF Report Generator - FIXED VERSION
 """
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.lib.units import inch, cm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage, PageBreak
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.pdfgen import canvas
 from reportlab.lib.colors import HexColor
 from io import BytesIO
 from typing import Dict, Any, List
 
-from .watermark_system import PDFWatermark
+from core.watermark_system import PDFWatermark
 
 
 class PDFGenerator:
@@ -132,19 +131,18 @@ class PDFGenerator:
         ]))
         story.append(zt)
         
-        # PAGE 3-4: Affiliate Products (YOUR REQUIREMENT)
+        # PAGE 3-4: Affiliate Products
         if affiliate_products:
             story.append(PageBreak())
             story.append(Paragraph("Recommended Products", title_style))
             story.append(Paragraph("Based on your homestead size and needs:", body_style))
             story.append(Spacer(1, 0.2*inch))
             
-            for i, product in enumerate(affiliate_products[:6], 1):  # Max 6 products
+            for i, product in enumerate(affiliate_products[:6], 1):
                 story.append(Paragraph(f"<b>{i}. {product.get('name', 'Product')}</b>", heading_style))
                 story.append(Paragraph(product.get('description', ''), body_style))
                 story.append(Paragraph(f"<b>Why we recommend:</b> {product.get('reason', '')}", body_style))
                 
-                # CTA based on level
                 cta_level = product.get('cta_level', 'medium')
                 if cta_level == 'high':
                     cta_text = f"<font color='red'><b>⭐ HIGHLY RECOMMENDED:</b></font> <a href='{product.get('url', '#')}' color='blue'>Get it now - Special Discount</a>"
