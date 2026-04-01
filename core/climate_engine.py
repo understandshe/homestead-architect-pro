@@ -11,28 +11,28 @@ class ClimateEngine:
     CLIMATE_ZONES = {
         'Tropical': {
             'rainfall': '2000+ mm',
-            'temp_range': '20-35°C',
+            'temp_range': '20-35Â°C',
             'growing_days': 365,
             'challenges': ['Heavy rain', 'Pests', 'Heat'],
             'solutions': ['Elevated structures', 'Good drainage', 'Shade nets']
         },
         'Dry': {
             'rainfall': '< 500 mm',
-            'temp_range': '10-40°C',
+            'temp_range': '10-40Â°C',
             'growing_days': 240,
             'challenges': ['Water scarcity', 'Heat', 'Dust'],
             'solutions': ['Water harvesting', 'Drought crops', 'Mulching']
         },
         'Temperate': {
             'rainfall': '500-1500 mm',
-            'temp_range': '-5 to 30°C',
+            'temp_range': '-5 to 30Â°C',
             'growing_days': 200,
             'challenges': ['Winter frost', 'Variable weather'],
             'solutions': ['Greenhouses', 'Seasonal planning', 'Cold storage']
         },
         'Cold': {
             'rainfall': '300-800 mm',
-            'temp_range': '-20 to 20°C',
+            'temp_range': '-20 to 20Â°C',
             'growing_days': 120,
             'challenges': ['Snow', 'Frozen ground', 'Short season'],
             'solutions': ['Heated greenhouses', 'Root cellar', 'Hardy breeds']
