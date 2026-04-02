@@ -1,15 +1,6 @@
 """
-3D Visualization Engine — Premium v4
+3D Visualization Engine — Premium v5
 Homestead Architect Pro 2026 — Global Edition
-
-Architecture:
-  Step 1: Register all SPINE ROADS in collision registry first
-  Step 2: Register HOUSE + all FEATURES (skip if collides)
-  Step 3: Place TREES last — checked against roads + features
-  → Nothing ever overlaps anything
-  → Every feature gets a SPUR path from nearest spine point
-  → Kitchen Garden always visible (rendered as zone surface + raised beds)
-  → 12 tree species with individual heights + canopy + income data
 """
 
 import plotly.graph_objects as go
@@ -18,9 +9,6 @@ import numpy as np
 from typing import Dict, Any, List, Tuple, Optional
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Collision Registry
-# ─────────────────────────────────────────────────────────────────────────────
 class _CollisionRegistry:
     CLEARANCE = 8.0   # ft minimum gap between any two elements
 
@@ -71,9 +59,7 @@ class _CollisionRegistry:
         return False
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  12 Tree species catalogue
-# ─────────────────────────────────────────────────────────────────────────────
+# 12 Tree species catalogue
 TREE_SPECIES = {
     'Mango':       dict(trunk_h=5,  canopy_bot=5,  canopy_top=20, canopy_r=9,  trunk_r=1.1,
                         color='#2E7D32', color2='#388E3C',
@@ -113,13 +99,9 @@ TREE_SPECIES = {
                         income_usd=(100,600),  unit='culm/yr', yield_val='20-50'),
 }
 
-# Default rotation of species list (for layout_engine output that has no species)
 _SPECIES_CYCLE = list(TREE_SPECIES.keys())
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Geometry primitives
-# ─────────────────────────────────────────────────────────────────────────────
 def _box(x0,y0,z0,x1,y1,z1,color,name,opacity=0.90,
          show_legend=True,legendgroup=None,flatshading=True) -> go.Mesh3d:
     vx=[x0,x1,x1,x0,x0,x1,x1,x0]; vy=[y0,y0,y1,y1,y0,y0,y1,y1]
@@ -160,46 +142,6 @@ def _cone(cx,cy,r,z0,z1,color,name,n=18,
                      showlegend=show_legend,legendgroup=legendgroup or name,
                      flatshading=True)
 
-def _path_slab(x0,y0,x1,y1,width,tz,color='#D7CCC8',
-               name='Path',show_legend=False,lg='Paths') -> List:
-    """
-    Axis-aligned path slab between two points.
-    Always uses L-shaped routing (horizontal then vertical),
-    so no diagonal paths that cut through diagonal space.
-    Returns list of Mesh3d traces for TWO segments: H + V.
-    """
-    traces = []
-    pw = width
-
-    # Segment 1: horizontal (x0,y0) → (x1,y0)
-    # Segment 2: vertical   (x1,y0) → (x1,y1)
-    # This makes an L-shape that hugs axes.
-    for seg_x0,seg_y0,seg_x1,seg_y1 in [
-        (min(x0,x1)-pw/2, min(y0,y0)-pw/2,
-         max(x0,x1)+pw/2, min(y0,y0)+pw/2),   # H segment
-        (x1-pw/2, min(y0,y1)-pw/2,
-         x1+pw/2, max(y0,y1)+pw/2),            # V segment
-    ]:
-        if abs(seg_x1-seg_x0)<0.5 or abs(seg_y1-seg_y0)<0.5:
-            continue
-        # Surface quad for path
-        nx=int(max(2,abs(seg_x1-seg_x0)/10))
-        ny=int(max(2,abs(seg_y1-seg_y0)/10))
-        xs=np.linspace(seg_x0,seg_x1,nx)
-        ys=np.linspace(seg_y0,seg_y1,ny)
-        Xg,Yg=np.meshgrid(xs,ys)
-        Zg=np.full_like(Xg, tz+0.06)
-        traces.append(go.Surface(
-            x=Xg,y=Yg,z=Zg,
-            colorscale=[[0,color],[1,'#BCAAA4']],
-            showscale=False,opacity=0.88,
-            name=name,showlegend=show_legend,
-            legendgroup=lg,
-        ))
-        show_legend=False
-    return traces
-
-
 def _spine_slab(x0,y0,x1,y1,width,tz,
                 color='#D7CCC8',name='Road',lg='Roads') -> go.Surface:
     """Full spine road as a flat Surface (no L-shape)."""
@@ -217,9 +159,6 @@ def _spine_slab(x0,y0,x1,y1,width,tz,
                       name=name,showlegend=True,legendgroup=lg)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Main class
-# ─────────────────────────────────────────────────────────────────────────────
 class Visualizer3D:
 
     ZONE_NAMES = {
@@ -237,7 +176,7 @@ class Visualizer3D:
 
         fig = go.Figure()
 
-        # ── STRICT ORDER: roads first, features second, trees last ──────
+        # STRICT ORDER: roads first, features second, trees last
         self._add_terrain(fig)
         self._add_zones(fig)
         self._add_spine_roads(fig)          # Step 1: roads registered
@@ -254,7 +193,6 @@ class Visualizer3D:
         self._configure_layout(fig)
         return fig
 
-    # ── Terrain Z helpers ─────────────────────────────────────────────────────
     def _tz(self, x, y) -> float:
         s,L,W = self._slope, self._L, self._W
         if s=='South': return y*0.03
@@ -271,7 +209,6 @@ class Visualizer3D:
         if s=='West':  return (L-X)*0.03
         return np.zeros_like(X)
 
-    # ── Terrain ───────────────────────────────────────────────────────────────
     def _add_terrain(self, fig):
         L,W=self._L,self._W
         x=np.linspace(0,L,40); y=np.linspace(0,W,40)
@@ -289,7 +226,6 @@ class Visualizer3D:
                                  size=max(0.01,(Z.max()-Z.min()+0.01)/5))),
         ))
 
-    # ── Zones ─────────────────────────────────────────────────────────────────
     def _add_zones(self, fig):
         zone_cs = {
             'z0':[[0,'#FFF9C4'],[1,'#FFFDE7']],
@@ -316,15 +252,8 @@ class Visualizer3D:
                 showlegend=True,legendgroup=zid,
             ))
 
-    # ── STEP 1: Spine roads — registered FIRST ────────────────────────────────
     def _add_spine_roads(self, fig):
-        """
-        Road network:
-          - Perimeter road (inner boundary, ~12ft from edge)
-          - Main N-S spine through house door
-          - Main E-W spine at house mid-height
-        All segments are registered in collision registry immediately.
-        """
+        """Road network - NO overlaps"""
         L,W = self._L,self._W
         hx,hy,hw,hd = self._house_bbox()
         door_cx = hx+hw/2
@@ -332,22 +261,15 @@ class Visualizer3D:
         main_w   = 10.0   # ft wide main road
         peri_w   = 8.0    # ft wide perimeter road
         peri_off = 12.0   # ft from boundary
-        tz_mid   = self._tz(L/2,W/2)
-        shown    = False
 
-        # ── Perimeter road ──────────────────────────────────────────────
+        # Perimeter road
         peri_segs = [
-            # South edge
-            (peri_off, peri_off,  L-peri_off, peri_off, False),
-            # North edge
-            (peri_off, W-peri_off,L-peri_off, W-peri_off, False),
-            # West edge
-            (peri_off, peri_off,  peri_off,   W-peri_off, False),
-            # East edge
-            (L-peri_off,peri_off, L-peri_off, W-peri_off, False),
+            (peri_off, peri_off,  L-peri_off, peri_off),
+            (peri_off, W-peri_off,L-peri_off, W-peri_off),
+            (peri_off, peri_off,  peri_off,   W-peri_off),
+            (L-peri_off,peri_off, L-peri_off, W-peri_off),
         ]
-        for (sx0,sy0,sx1,sy1,_) in peri_segs:
-            # Register perimeter road rectangles
+        for (sx0,sy0,sx1,sy1) in peri_segs:
             if sx0==sx1:  # vertical
                 self._reg.register_rect(sx0-peri_w/2,sy0,sx0+peri_w/2,sy1)
             else:         # horizontal
@@ -356,25 +278,24 @@ class Visualizer3D:
             fig.add_trace(_spine_slab(sx0,sy0,sx1,sy1,peri_w,tz,
                                       name='Perimeter Road',lg='Roads'))
 
-        # ── Main N-S spine (house entrance → south boundary) ─────────────
+        # Main N-S spine (house entrance → south boundary)
         self._reg.register_rect(door_cx-main_w/2, 0, door_cx+main_w/2, hy)
         fig.add_trace(_spine_slab(door_cx,0,door_cx,hy,main_w,
                                   self._tz(door_cx,hy/2),
                                   name='Main Road',lg='Roads'))
 
-        # ── Main E-W cross road ───────────────────────────────────────────
+        # Main E-W cross road
         self._reg.register_rect(0,cross_y-main_w/2,L,cross_y+main_w/2)
         fig.add_trace(_spine_slab(0,cross_y,L,cross_y,main_w,
                                   self._tz(L/2,cross_y),
                                   name='Main Road',lg='Roads'))
 
-        # ── N-S spine top section (above house to north boundary) ─────────
+        # N-S spine top section (above house to north boundary)
         self._reg.register_rect(door_cx-main_w/2,hy+hd,door_cx+main_w/2,W)
         fig.add_trace(_spine_slab(door_cx,hy+hd,door_cx,W,main_w,
                                   self._tz(door_cx,(hy+hd+W)/2),
                                   name='Main Road',lg='Roads'))
 
-    # ── STEP 2a: House (registered after roads) ───────────────────────────────
     def _house_bbox(self):
         L,W=self._L,self._W
         pos=self._layout.get('house_position','Center')
@@ -408,7 +329,7 @@ class Visualizer3D:
             (hx+hw-wall_t,hy,  hx+hw, hy+hd,          '#BCAAA4'),
         ]:
             fig.add_trace(_box(wx0,wy0,base,wx1,wy1,roof_b,wc,'House',0.97,
-                               wx0==hx and wy0==hy,lg))  # showlegend only first
+                               wx0==hx and wy0==hy,lg))
         # Floor
         fig.add_trace(_box(hx+wall_t,hy+wall_t,base,
                            hx+hw-wall_t,hy+hd-wall_t,base+0.2,
@@ -441,7 +362,6 @@ class Visualizer3D:
             fig.add_trace(_cylinder(col_x,py2+pd2/2,0.5,base,pz2,
                                     '#8D6E63','Porch Column',show_legend=False,legendgroup=lg))
 
-    # ── STEP 2b: Kitchen Garden — always drawn regardless of collision ─────────
     def _add_kitchen_garden(self, fig):
         zones=self._layout.get('zone_positions',{})
         if 'z1' not in zones: return
@@ -492,7 +412,6 @@ class Visualizer3D:
                                          name='Garden Path',showlegend=(i==0),
                                          legendgroup='Kitchen Garden'))
 
-    # ── Water features ────────────────────────────────────────────────────────
     def _add_water_features(self, fig):
         features=self._layout.get('features',{})
 
@@ -518,21 +437,18 @@ class Visualizer3D:
                     line=dict(color='#5D4037',width=4),
                     name='Pond Rim',showlegend=False,legendgroup='Pond'))
 
-        for key in('borewell','well'):
-            if key in features:
-                f=features[key]; r=f.get('radius',4)
-                base=self._tz(f['x'],f['y'])
-                if self._reg.circle_clear(f['x'],f['y'],r):
-                    self._reg.register_circle(f['x'],f['y'],r)
-                    fig.add_trace(_cylinder(f['x'],f['y'],r,base,base+5,
-                                            '#546E7A','Borewell',
-                                            show_legend=True,legendgroup='Borewell'))
-                    fig.add_trace(_cylinder(f['x'],f['y'],r*0.8,base,base+3.5,
-                                            '#4FC3F7','Borewell Water',
-                                            show_legend=False,legendgroup='Borewell'))
-                break
+        if 'well' in features:
+            f=features['well']; r=f.get('radius',4)
+            base=self._tz(f['x'],f['y'])
+            if self._reg.circle_clear(f['x'],f['y'],r):
+                self._reg.register_circle(f['x'],f['y'],r)
+                fig.add_trace(_cylinder(f['x'],f['y'],r,base,base+5,
+                                        '#546E7A','Borewell',
+                                        show_legend=True,legendgroup='Borewell'))
+                fig.add_trace(_cylinder(f['x'],f['y'],r*0.8,base,base+3.5,
+                                        '#4FC3F7','Borewell Water',
+                                        show_legend=False,legendgroup='Borewell'))
 
-    # ── Solar ─────────────────────────────────────────────────────────────────
     def _add_solar(self, fig):
         f=self._layout.get('features',{}).get('solar')
         if not f: return
@@ -552,7 +468,6 @@ class Visualizer3D:
                                    '#1565C0','Solar Panels',0.97,sl,'Solar'))
                 sl=False
 
-    # ── Greenhouse ────────────────────────────────────────────────────────────
     def _add_greenhouse(self, fig):
         f=self._layout.get('features',{}).get('greenhouse')
         if not f: return
@@ -570,7 +485,6 @@ class Visualizer3D:
             fig.add_trace(_box(x0+4,sy,base+0.5,x1-4,sy+8,base+1.3,
                                '#5D4037','GH Bed',0.90,False,'Greenhouse'))
 
-    # ── Rain tank ─────────────────────────────────────────────────────────────
     def _add_rain_tank(self, fig):
         f=self._layout.get('features',{}).get('rain_tank')
         if not f: return
@@ -581,7 +495,6 @@ class Visualizer3D:
         fig.add_trace(_box(x0,y0,base,x1,y1,base+6,'#4FC3F7',
                            'Rain Tank',0.80,True,'Rain Tank'))
 
-    # ── All livestock ─────────────────────────────────────────────────────────
     def _add_all_livestock(self, fig):
         features=self._layout.get('features',{})
         cfg={
@@ -613,12 +526,10 @@ class Visualizer3D:
                     fig.add_trace(_box(hxe,y0+2,base,hxe+hw_e,y1-2,base+3.5,
                                        '#FFF176',f'Hive{hi+1}',0.95,False,label))
 
-    # ── STEP 2c: Feature spur paths — each feature gets a short path to spine ─
     def _add_feature_spurs(self, fig):
         """
         For every placed feature, draw a short path from the nearest spine
-        point to the feature entrance. Spurs are THIN (6ft) and drawn ON TOP
-        of the zone surface, never through another feature.
+        point to the feature entrance.
         """
         features=self._layout.get('features',{})
         hx,hy,hw,hd=self._house_bbox()
@@ -631,13 +542,10 @@ class Visualizer3D:
         def _spur(fx,fy):
             nonlocal show_leg
             tz=self._tz(fx,fy)
-            # Nearest spine point: either cross_y or door_cx column
-            # Snap to closest of the two main axes
+            # Nearest spine point
             if abs(fx-door_cx)<abs(fy-cross_y):
-                # Closer to N-S spine: go horizontal to door_cx, then along spine
                 spine_x,spine_y=door_cx,fy
             else:
-                # Closer to E-W spine: go vertical to cross_y, then along spine
                 spine_x,spine_y=fx,cross_y
 
             # Draw H segment
@@ -666,101 +574,83 @@ class Visualizer3D:
 
         for key in features:
             f=features[key]
+            
+            # Skip features without proper coordinates
+            if key == 'swales':
+                continue  # Swales don't need spurs
+            if key == 'compost':
+                # Compost is a list
+                if isinstance(f, list):
+                    for cf in f:
+                        if 'x' in cf and 'y' in cf:
+                            fx, fy = cf['x'], cf['y']
+                            if self._reg.point_in_any(fx, fy):
+                                _spur(fx, fy)
+                continue
+            
+            # Normal features with x, y
             if 'radius' in f:
                 fx,fy=f['x'],f['y']
-            else:
+            elif 'x' in f and 'y' in f:
                 fx=f['x']+f.get('width',20)/2
                 fy=f['y']+f.get('height',20)/2
-            # Only draw spur if feature is registered (was placed successfully)
+            else:
+                continue  # Skip features without coordinates
+                
+            # Only draw spur if feature is registered
             if not self._reg.point_in_any(fx,fy):
                 continue
             _spur(fx,fy)
 
-    # ── STEP 3: Trees — checked against ALL registered elements ──────────────
     def _add_trees(self, fig):
-        zones=self._layout.get('zone_positions',{})
-        features=self._layout.get('features',{})
-        extra_trees=self._layout.get('extra_trees',[])  # custom user trees
-
-        # Gather all zone positions for tree placement
-        z2_zones=[]
-        if 'z2' in zones:
-            z2_zones.append(zones['z2'])
-
-        # Also scatter some in z3 edges (not in crops, but borders)
-        border_zones=[]
-        if 'z4' in zones:
-            border_zones.append(zones['z4'])
-
-        # Build placement list from z2
-        species_cycle = _SPECIES_CYCLE.copy()
-        placements=[]
-        for z in z2_zones:
-            np.random.seed(42)
-            rx_list=np.random.uniform(0.05,0.95,20)
-            ry_list=np.random.uniform(0.05,0.95,20)
-            for idx,(rx,ry) in enumerate(zip(rx_list,ry_list)):
-                tx=z['x']+rx*z['width']
-                ty=z['y']+ry*z['height']
-                sp=species_cycle[idx%len(species_cycle)]
-                placements.append((tx,ty,sp))
-
-        # Buffer zone (z4): Neem, Teak, Bamboo border trees
-        for z in border_zones:
-            np.random.seed(77)
-            for idx in range(12):
-                rx=np.random.uniform(0.02,0.98)
-                ry=np.random.uniform(0.05,0.95)
-                tx=z['x']+rx*z['width']
-                ty=z['y']+ry*z['height']
-                sp=['Neem','Teak','Bamboo'][idx%3]
-                placements.append((tx,ty,sp))
-
-        # Custom user trees
-        for item in extra_trees:
-            placements.append((item['x'],item['y'],item.get('species','Mango')))
-
-        first_tree=True
-        for tx,ty,species in placements:
-            sp=TREE_SPECIES.get(species,TREE_SPECIES['Mango'])
-            cr=sp['canopy_r']
-            tr=sp['trunk_r']
+        """Place trees from layout's tree_placements with collision detection"""
+        tree_placements = self._layout.get('tree_placements', [])
+        
+        first_tree = True
+        for tree in tree_placements:
+            tx = tree.get('x', 0)
+            ty = tree.get('y', 0)
+            species = tree.get('species', 'Mango')
+            
+            sp = TREE_SPECIES.get(species, TREE_SPECIES['Mango'])
+            cr = sp['canopy_r']
+            tr = sp['trunk_r']
 
             # Clamp inside property
-            tx=max(cr+2, min(tx, self._L-cr-2))
-            ty=max(cr+2, min(ty, self._W-cr-2))
+            tx = max(cr+2, min(tx, self._L-cr-2))
+            ty = max(cr+2, min(ty, self._W-cr-2))
 
             # Strict collision check — skip if overlaps road/feature
-            if not self._reg.circle_clear(tx,ty,cr):
+            if not self._reg.circle_clear(tx, ty, cr):
                 continue
-            self._reg.register_circle(tx,ty,cr)
+            self._reg.register_circle(tx, ty, cr)
 
-            base=self._tz(tx,ty)+1.3
+            base = self._tz(tx, ty) + 1.3
 
             # Trunk
-            fig.add_trace(_cylinder(tx,ty,tr,base,base+sp['trunk_h'],
-                                    '#6D4C41',species,show_legend=first_tree,
+            fig.add_trace(_cylinder(tx, ty, tr, base, base+sp['trunk_h'],
+                                    '#6D4C41', species, show_legend=first_tree,
                                     legendgroup='Trees'))
             # Primary canopy
-            fig.add_trace(_cone(tx,ty,cr,base+sp['canopy_bot'],
-                                base+sp['canopy_top'],sp['color'],species,
-                                show_legend=False,legendgroup='Trees'))
+            fig.add_trace(_cone(tx, ty, cr, base+sp['canopy_bot'],
+                                base+sp['canopy_top'], sp['color'], species,
+                                show_legend=False, legendgroup='Trees'))
             # Secondary canopy (rounder look)
-            fig.add_trace(_cone(tx,ty,cr*0.70,
+            fig.add_trace(_cone(tx, ty, cr*0.70,
                                 base+sp['canopy_bot']+cr*0.35,
                                 base+sp['canopy_top']+cr*0.12,
-                                sp['color2'],species,
-                                show_legend=False,legendgroup='Trees'))
-            first_tree=False
+                                sp['color2'], species,
+                                show_legend=False, legendgroup='Trees'))
+            first_tree = False
 
-    # ── Layout ────────────────────────────────────────────────────────────────
     def _configure_layout(self, fig):
         L,W=self._L,self._W
         acres=self._layout.get('acres',round(L*W/43560,2))
+        tree_count = self._layout.get('tree_count', 0)
         fig.update_layout(
             title=dict(
                 text=(f"🏡 3D Homestead — {acres:.2f} acres ({int(L)} × {int(W)} ft)"
-                      "<br><sup>Click legend to toggle layers · Drag to rotate</sup>"),
+                      f"<br><sup>{tree_count} trees planted · Click legend to toggle layers · Drag to rotate</sup>"),
                 font=dict(size=15,color='#2E7D32',family='Arial'),x=0.5,
             ),
             scene=dict(
