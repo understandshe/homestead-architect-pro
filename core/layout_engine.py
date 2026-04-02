@@ -1,10 +1,15 @@
 """
-AI Layout Engine â€” v3 PROFESSIONAL
-Homestead Architect Pro 2026
+AI Layout Engine - v4 PROFESSIONAL
+Homestead Architect Pro 2026 - Global Edition
+
+Fixes:
+  - All features have proper x,y coordinates
+  - No missing keys for any feature type
+  - Tree placement data passed to visualizers
 """
 
 from typing import Dict, Any
-
+import random
 
 class LayoutEngine:
 
@@ -12,6 +17,46 @@ class LayoutEngine:
         'small':  {'z0': 0.10, 'z1': 0.18, 'z2': 0.22, 'z3': 0.38, 'z4': 0.12},
         'medium': {'z0': 0.08, 'z1': 0.14, 'z2': 0.28, 'z3': 0.35, 'z4': 0.15},
         'large':  {'z0': 0.05, 'z1': 0.10, 'z2': 0.35, 'z3': 0.30, 'z4': 0.20},
+    }
+
+    # 12 Tree species with full data
+    TREE_SPECIES = {
+        'Mango': {'trunk_h': 5, 'canopy_bot': 5, 'canopy_top': 20, 'canopy_r': 9, 'trunk_r': 1.1,
+                 'color': '#2E7D32', 'color2': '#388E3C',
+                 'income_usd': (300, 1500), 'unit': 'kg/yr', 'yield_val': '80-200'},
+        'Jackfruit': {'trunk_h': 8, 'canopy_bot': 8, 'canopy_top': 28, 'canopy_r': 10, 'trunk_r': 1.4,
+                     'color': '#1B5E20', 'color2': '#2E7D32',
+                     'income_usd': (200, 800), 'unit': 'kg/yr', 'yield_val': '50-200'},
+        'Coconut': {'trunk_h': 22, 'canopy_bot': 22, 'canopy_top': 32, 'canopy_r': 6, 'trunk_r': 0.7,
+                   'color': '#33691E', 'color2': '#558B2F',
+                   'income_usd': (150, 600), 'unit': 'nuts/yr', 'yield_val': '80-200'},
+        'Banana': {'trunk_h': 3, 'canopy_bot': 3, 'canopy_top': 10, 'canopy_r': 5, 'trunk_r': 1.6,
+                  'color': '#558B2F', 'color2': '#7CB342',
+                  'income_usd': (100, 400), 'unit': 'bunch/yr', 'yield_val': '5-20'},
+        'Guava': {'trunk_h': 4, 'canopy_bot': 4, 'canopy_top': 14, 'canopy_r': 5, 'trunk_r': 0.8,
+                 'color': '#33691E', 'color2': '#43A047',
+                 'income_usd': (80, 300), 'unit': 'kg/yr', 'yield_val': '20-60'},
+        'Papaya': {'trunk_h': 4, 'canopy_bot': 4, 'canopy_top': 11, 'canopy_r': 3.5, 'trunk_r': 0.5,
+                  'color': '#558B2F', 'color2': '#8BC34A',
+                  'income_usd': (60, 250), 'unit': 'kg/yr', 'yield_val': '30-80'},
+        'Avocado': {'trunk_h': 7, 'canopy_bot': 7, 'canopy_top': 19, 'canopy_r': 7, 'trunk_r': 1.0,
+                   'color': '#2E7D32', 'color2': '#1B5E20',
+                   'income_usd': (400, 2000), 'unit': 'kg/yr', 'yield_val': '50-200'},
+        'Moringa': {'trunk_h': 6, 'canopy_bot': 6, 'canopy_top': 16, 'canopy_r': 4, 'trunk_r': 0.6,
+                   'color': '#66BB6A', 'color2': '#4CAF50',
+                   'income_usd': (100, 500), 'unit': 'kg/yr', 'yield_val': '200-500'},
+        'Citrus': {'trunk_h': 4, 'canopy_bot': 4, 'canopy_top': 13, 'canopy_r': 5, 'trunk_r': 0.7,
+                  'color': '#43A047', 'color2': '#66BB6A',
+                  'income_usd': (150, 600), 'unit': 'kg/yr', 'yield_val': '30-80'},
+        'Neem': {'trunk_h': 9, 'canopy_bot': 9, 'canopy_top': 25, 'canopy_r': 10, 'trunk_r': 1.2,
+                'color': '#388E3C', 'color2': '#2E7D32',
+                'income_usd': (50, 200), 'unit': 'kg/yr', 'yield_val': '5-15 (seed)'},
+        'Teak': {'trunk_h': 15, 'canopy_bot': 15, 'canopy_top': 30, 'canopy_r': 8, 'trunk_r': 1.0,
+                'color': '#1B5E20', 'color2': '#2E7D32',
+                'income_usd': (500, 3000), 'unit': 'tree at 15yr', 'yield_val': '1 log'},
+        'Bamboo': {'trunk_h': 0, 'canopy_bot': 0, 'canopy_top': 18, 'canopy_r': 3, 'trunk_r': 0.4,
+                  'color': '#4CAF50', 'color2': '#8BC34A',
+                  'income_usd': (100, 600), 'unit': 'culm/yr', 'yield_val': '20-50'},
     }
 
     def generate(self, answers: Dict[str, Any]) -> Dict[str, Any]:
@@ -24,15 +69,64 @@ class LayoutEngine:
         house_pos = answers.get('house_position', 'Center')
         zone_positions = self._make_zone_positions(L, W, zones, house_pos)
         features = self._make_features(answers, L, W, house_pos, zone_positions)
+        
+        # Generate tree placements based on user slider
+        tree_count = answers.get('tree_count', 15)
+        tree_placements = self._generate_tree_placements(tree_count, zone_positions, L, W)
+        
         return {
-            'total_sqft': total_sqft, 'acres': acres, 'category': category,
-            'dimensions': {'L': L, 'W': W}, 'zones': zones,
-            'zone_positions': zone_positions, 'house_position': house_pos,
+            'total_sqft': total_sqft,
+            'acres': acres,
+            'category': category,
+            'dimensions': {'L': L, 'W': W},
+            'zones': zones,
+            'zone_positions': zone_positions,
+            'house_position': house_pos,
             'features': features,
+            'tree_placements': tree_placements,
+            'tree_species': self.TREE_SPECIES,
             'water_source': answers.get('water_source', 'Borewell/Well'),
             'slope': answers.get('slope', 'Flat'),
             'livestock': answers.get('livestock', ['None']),
+            'tree_count': tree_count,
         }
+
+    def _generate_tree_placements(self, count: int, zone_positions: dict, L: float, W: float) -> list:
+        """Generate tree positions with proper spacing"""
+        placements = []
+        z2 = zone_positions.get('z2')
+        z4 = zone_positions.get('z4')
+        
+        if not z2:
+            return placements
+            
+        species_list = list(self.TREE_SPECIES.keys())
+        random.seed(42)  # Consistent placement
+        
+        # Place trees in z2 (Food Forest)
+        for i in range(min(count, 35)):  # Max 35 in z2
+            margin = 15  # Keep away from edges
+            x = z2['x'] + margin + random.random() * (z2['width'] - 2*margin)
+            y = z2['y'] + margin + random.random() * (z2['height'] - 2*margin)
+            species = species_list[i % len(species_list)]
+            placements.append({
+                'x': x, 'y': y, 'species': species,
+                'id': f'tree_{i}', 'zone': 'z2'
+            })
+        
+        # Place remaining in z4 (Buffer Zone) - Neem, Teak, Bamboo
+        if z4 and count > 35:
+            for i in range(count - 35):
+                margin = 10
+                x = z4['x'] + margin + random.random() * (z4['width'] - 2*margin)
+                y = z4['y'] + margin + random.random() * (z4['height'] - 2*margin)
+                species = ['Neem', 'Teak', 'Bamboo'][i % 3]
+                placements.append({
+                    'x': x, 'y': y, 'species': species,
+                    'id': f'tree_buffer_{i}', 'zone': 'z4'
+                })
+        
+        return placements
 
     def _make_zone_positions(self, L, W, zones, house_pos):
         pos = {}
@@ -85,39 +179,44 @@ class LayoutEngine:
         z1 = zone_positions.get('z1', {})
         z3 = zone_positions.get('z3', {'x': 0, 'y': W*0.5, 'width': L, 'height': W*0.35})
 
-        # Solar â€” always south of house (low Y), inside plot
+        # Solar — always south of house (low Y), inside plot
         solar_w = self._clamp(hw * 0.45, L * 0.06, L * 0.18)
         solar_h = self._clamp(hh * 0.35, W * 0.04, W * 0.10)
         solar_y = self._clamp(hy - solar_h - W * 0.03, 0, W - solar_h)
         solar_x = self._clamp(hcx - solar_w / 2, 0, L - solar_w)
         features['solar'] = {'x': solar_x, 'y': solar_y, 'width': solar_w, 'height': solar_h}
 
-        # Greenhouse â€” east of house, same vertical band
+        # Greenhouse — east of house, same vertical band
         gh_w = self._clamp(hw * 0.50, L * 0.08, L * 0.18)
         gh_h = self._clamp(hh * 0.60, W * 0.08, W * 0.18)
         gh_x = self._clamp(hx + hw + L * 0.025, 0, L - gh_w)
         gh_y = self._clamp(hcy - gh_h / 2, 0, W - gh_h)
         features['greenhouse'] = {'x': gh_x, 'y': gh_y, 'width': gh_w, 'height': gh_h}
 
-        # Water
+        # Water features with proper coordinates
         if 'Borewell' in water or 'Well' in water:
             features['well'] = {
-                'x': self._clamp(L * 0.90, 0, L), 'y': self._clamp(W * 0.90, 0, W),
+                'x': self._clamp(L * 0.90, 0, L),
+                'y': self._clamp(W * 0.90, 0, W),
                 'radius': min(L, W) * 0.018,
             }
+        
         if 'Pond' in water or 'River' in water:
             features['pond'] = {
                 'x': z3['x'] + z3['width'] * 0.08,
                 'y': z3['y'] + z3['height'] * 0.15,
                 'radius': min(L, W) * 0.07,
             }
+        
         if 'Rainwater' in water:
             features['rain_tank'] = {
                 'x': self._clamp(hx - L * 0.09, 0, L - L*0.06),
-                'y': hy, 'width': L * 0.06, 'height': hh * 0.35,
+                'y': hy,
+                'width': L * 0.06,
+                'height': hh * 0.35,
             }
 
-        # Compost â€” in z1, far from house
+        # Compost — in z1, far from house
         if z1:
             features['compost'] = [
                 {'x': self._clamp(z1['x'] + z1['width']*0.07, 0, L),
@@ -128,12 +227,20 @@ class LayoutEngine:
                  'size': min(L, W) * 0.016},
             ]
 
-        # Swales
+        # Swales - now with x,y coordinates for proper rendering
         slope = answers.get('slope', 'Flat')
         if slope != 'Flat' and z3:
             features['swales'] = [
-                {'y': z3['y'] + z3['height'] * 0.30, 'curve': 'sin'},
-                {'y': z3['y'] + z3['height'] * 0.65, 'curve': 'sin'},
+                {'x': z3['x'] + z3['width'] * 0.5,  # Center x
+                 'y': z3['y'] + z3['height'] * 0.30,
+                 'width': z3['width'] * 0.8,
+                 'height': 3,  # Swale width
+                 'curve': 'sin'},
+                {'x': z3['x'] + z3['width'] * 0.5,
+                 'y': z3['y'] + z3['height'] * 0.65,
+                 'width': z3['width'] * 0.8,
+                 'height': 3,
+                 'curve': 'sin'},
             ]
 
         # Livestock grid in right portion of Z3
@@ -191,6 +298,7 @@ class LayoutEngine:
                 'height': z3['height'] * 0.28,
             }
 
+        # Reference to first livestock for backward compatibility
         for k in ('goat_shed', 'chicken_coop', 'piggery', 'cow_shed'):
             if k in features:
                 features['livestock'] = features[k]
