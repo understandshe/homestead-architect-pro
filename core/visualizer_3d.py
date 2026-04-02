@@ -1,17 +1,15 @@
 """
-3D Visualization Engine — Premium Realistic Edition
+3D Visualization Engine — Premium v4
 Homestead Architect Pro 2026 — Global Edition
 
-Features:
-  - Collision detection: every element checks 10 ft clearance before placing
-  - Dynamic paths from house to EVERY feature the user selected
-  - Kitchen Garden (z1): raised beds, plant rows, soil texture
-  - Realistic terrain: grass/soil surface shading via go.Surface
-  - Option-B House: proper 3D exterior, walls + hip roof + colored windows + door
-  - Tree species have individual realistic heights (Mango 20ft, Coconut 30ft, etc.)
-  - Legend toggle: click legend item to hide/show that trace
-  - No hardcoded positions: everything derived from layout dict
-  - All livestock types individually drawn with roofs
+Architecture:
+  Step 1: Register all SPINE ROADS in collision registry first
+  Step 2: Register HOUSE + all FEATURES (skip if collides)
+  Step 3: Place TREES last — checked against roads + features
+  → Nothing ever overlaps anything
+  → Every feature gets a SPUR path from nearest spine point
+  → Kitchen Garden always visible (rendered as zone surface + raised beds)
+  → 12 tree species with individual heights + canopy + income data
 """
 
 import plotly.graph_objects as go
@@ -24,161 +22,199 @@ from typing import Dict, Any, List, Tuple, Optional
 #  Collision Registry
 # ─────────────────────────────────────────────────────────────────────────────
 class _CollisionRegistry:
-    """
-    Keeps axis-aligned bounding boxes for placed elements.
-    Enforces a minimum clearance (default 10 ft) between any two elements.
-    """
-    CLEARANCE = 10.0
+    CLEARANCE = 8.0   # ft minimum gap between any two elements
 
     def __init__(self):
-        self._rects: List[Tuple[float, float, float, float]] = []   # x0,y0,x1,y1
-        self._circles: List[Tuple[float, float, float]] = []         # cx,cy,r
+        self._rects: List[Tuple[float,float,float,float]] = []
+        self._circles: List[Tuple[float,float,float]] = []
 
-    def register_rect(self, x0: float, y0: float, x1: float, y1: float):
-        self._rects.append((min(x0,x1), min(y0,y1), max(x0,x1), max(y0,y1)))
+    def _expand_rect(self, x0,y0,x1,y1,c):
+        return min(x0,x1)-c, min(y0,y1)-c, max(x0,x1)+c, max(y0,y1)+c
 
-    def register_circle(self, cx: float, cy: float, r: float):
-        self._circles.append((cx, cy, r))
+    def register_rect(self, x0,y0,x1,y1):
+        self._rects.append((min(x0,x1),min(y0,y1),max(x0,x1),max(y0,y1)))
 
-    def rect_clear(self, x0: float, y0: float, x1: float, y1: float) -> bool:
+    def register_circle(self, cx,cy,r):
+        self._circles.append((cx,cy,r))
+
+    def rect_clear(self, x0,y0,x1,y1) -> bool:
         c = self.CLEARANCE
-        ax0, ay0, ax1, ay1 = min(x0,x1)-c, min(y0,y1)-c, max(x0,x1)+c, max(y0,y1)+c
+        ax0,ay0,ax1,ay1 = self._expand_rect(x0,y0,x1,y1,c)
         for (rx0,ry0,rx1,ry1) in self._rects:
-            if ax0 < rx1 and ax1 > rx0 and ay0 < ry1 and ay1 > ry0:
+            if ax0<rx1 and ax1>rx0 and ay0<ry1 and ay1>ry0:
                 return False
         for (cx,cy,r) in self._circles:
-            nearest_x = max(ax0, min(cx, ax1))
-            nearest_y = max(ay0, min(cy, ay1))
-            if (cx-nearest_x)**2+(cy-nearest_y)**2 < (r+c)**2:
+            nx = max(ax0,min(cx,ax1)); ny = max(ay0,min(cy,ay1))
+            if (cx-nx)**2+(cy-ny)**2 < (r+c)**2:
                 return False
         return True
 
-    def circle_clear(self, cx: float, cy: float, r: float) -> bool:
+    def circle_clear(self, cx,cy,r) -> bool:
         c = self.CLEARANCE
         for (rx0,ry0,rx1,ry1) in self._rects:
-            nearest_x = max(rx0, min(cx, rx1))
-            nearest_y = max(ry0, min(cy, ry1))
-            if (cx-nearest_x)**2+(cy-nearest_y)**2 < (r+c)**2:
+            nx = max(rx0,min(cx,rx1)); ny = max(ry0,min(cy,ry1))
+            if (cx-nx)**2+(cy-ny)**2 < (r+c)**2:
                 return False
         for (ocx,ocy,or_) in self._circles:
             if (cx-ocx)**2+(cy-ocy)**2 < (r+or_+c)**2:
                 return False
         return True
 
-    def force_register_rect(self, x0, y0, x1, y1):
-        """Register without clearing check (for house, terrain baseline)."""
-        self._rects.append((min(x0,x1), min(y0,y1), max(x0,x1), max(y0,y1)))
+    def point_in_any(self, px, py) -> bool:
+        """True if point is inside any registered element."""
+        for (rx0,ry0,rx1,ry1) in self._rects:
+            if rx0<=px<=rx1 and ry0<=py<=ry1:
+                return True
+        for (cx,cy,r) in self._circles:
+            if (px-cx)**2+(py-cy)**2<=r**2:
+                return True
+        return False
 
-    def force_register_circle(self, cx, cy, r):
-        self._circles.append((cx, cy, r))
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  12 Tree species catalogue
+# ─────────────────────────────────────────────────────────────────────────────
+TREE_SPECIES = {
+    'Mango':       dict(trunk_h=5,  canopy_bot=5,  canopy_top=20, canopy_r=9,  trunk_r=1.1,
+                        color='#2E7D32', color2='#388E3C',
+                        income_usd=(300,1500), unit='kg/yr', yield_val='80-200'),
+    'Jackfruit':   dict(trunk_h=8,  canopy_bot=8,  canopy_top=28, canopy_r=10, trunk_r=1.4,
+                        color='#1B5E20', color2='#2E7D32',
+                        income_usd=(200,800),  unit='kg/yr', yield_val='50-200'),
+    'Coconut':     dict(trunk_h=22, canopy_bot=22, canopy_top=32, canopy_r=6,  trunk_r=0.7,
+                        color='#33691E', color2='#558B2F',
+                        income_usd=(150,600),  unit='nuts/yr', yield_val='80-200'),
+    'Banana':      dict(trunk_h=3,  canopy_bot=3,  canopy_top=10, canopy_r=5,  trunk_r=1.6,
+                        color='#558B2F', color2='#7CB342',
+                        income_usd=(100,400),  unit='bunch/yr', yield_val='5-20'),
+    'Guava':       dict(trunk_h=4,  canopy_bot=4,  canopy_top=14, canopy_r=5,  trunk_r=0.8,
+                        color='#33691E', color2='#43A047',
+                        income_usd=(80,300),   unit='kg/yr', yield_val='20-60'),
+    'Papaya':      dict(trunk_h=4,  canopy_bot=4,  canopy_top=11, canopy_r=3.5,trunk_r=0.5,
+                        color='#558B2F', color2='#8BC34A',
+                        income_usd=(60,250),   unit='kg/yr', yield_val='30-80'),
+    'Avocado':     dict(trunk_h=7,  canopy_bot=7,  canopy_top=19, canopy_r=7,  trunk_r=1.0,
+                        color='#2E7D32', color2='#1B5E20',
+                        income_usd=(400,2000), unit='kg/yr', yield_val='50-200'),
+    'Moringa':     dict(trunk_h=6,  canopy_bot=6,  canopy_top=16, canopy_r=4,  trunk_r=0.6,
+                        color='#66BB6A', color2='#4CAF50',
+                        income_usd=(100,500),  unit='kg/yr', yield_val='200-500'),
+    'Citrus':      dict(trunk_h=4,  canopy_bot=4,  canopy_top=13, canopy_r=5,  trunk_r=0.7,
+                        color='#43A047', color2='#66BB6A',
+                        income_usd=(150,600),  unit='kg/yr', yield_val='30-80'),
+    'Neem':        dict(trunk_h=9,  canopy_bot=9,  canopy_top=25, canopy_r=10, trunk_r=1.2,
+                        color='#388E3C', color2='#2E7D32',
+                        income_usd=(50,200),   unit='kg/yr', yield_val='5-15 (seed)'),
+    'Teak':        dict(trunk_h=15, canopy_bot=15, canopy_top=30, canopy_r=8,  trunk_r=1.0,
+                        color='#1B5E20', color2='#2E7D32',
+                        income_usd=(500,3000), unit='tree at 15yr', yield_val='1 log'),
+    'Bamboo':      dict(trunk_h=0,  canopy_bot=0,  canopy_top=18, canopy_r=3,  trunk_r=0.4,
+                        color='#4CAF50', color2='#8BC34A',
+                        income_usd=(100,600),  unit='culm/yr', yield_val='20-50'),
+}
+
+# Default rotation of species list (for layout_engine output that has no species)
+_SPECIES_CYCLE = list(TREE_SPECIES.keys())
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Geometry primitives
 # ─────────────────────────────────────────────────────────────────────────────
-def _box(x0,y0,z0, x1,y1,z1, color, name, opacity=0.90, show_legend=True,
-         legendgroup=None) -> go.Mesh3d:
-    """Correct 6-face axis-aligned box with explicit i/j/k face indices."""
-    vx = [x0,x1,x1,x0, x0,x1,x1,x0]
-    vy = [y0,y0,y1,y1, y0,y0,y1,y1]
-    vz = [z0,z0,z0,z0, z1,z1,z1,z1]
-    fi = [0,0, 4,4, 0,0, 2,2, 0,0, 1,1]
-    fj = [1,2, 5,6, 1,5, 3,7, 3,7, 2,6]
-    fk = [2,3, 6,7, 5,4, 7,6, 7,4, 6,5]
-    return go.Mesh3d(x=vx,y=vy,z=vz,i=fi,j=fj,k=fk,
-                     color=color, opacity=opacity, name=name,
-                     showlegend=show_legend,
-                     legendgroup=legendgroup or name,
-                     legendgrouptitle_text=None,
-                     flatshading=True,
-                     lighting=dict(ambient=0.6,diffuse=0.9,specular=0.3,
-                                   roughness=0.5,fresnel=0.1))
+def _box(x0,y0,z0,x1,y1,z1,color,name,opacity=0.90,
+         show_legend=True,legendgroup=None,flatshading=True) -> go.Mesh3d:
+    vx=[x0,x1,x1,x0,x0,x1,x1,x0]; vy=[y0,y0,y1,y1,y0,y0,y1,y1]
+    vz=[z0,z0,z0,z0,z1,z1,z1,z1]
+    fi=[0,0,4,4,0,0,2,2,0,0,1,1]; fj=[1,2,5,6,1,5,3,7,3,7,2,6]
+    fk=[2,3,6,7,5,4,7,6,7,4,6,5]
+    return go.Mesh3d(x=vx,y=vy,z=vz,i=fi,j=fj,k=fk,color=color,
+                     opacity=opacity,name=name,showlegend=show_legend,
+                     legendgroup=legendgroup or name,flatshading=flatshading,
+                     lighting=dict(ambient=0.60,diffuse=0.90,specular=0.25,
+                                   roughness=0.55,fresnel=0.10))
 
-def _hip_roof(x0,y0,x1,y1, base_z, apex_z, color, name='Roof',
-              legendgroup=None) -> go.Mesh3d:
-    cx,cy = (x0+x1)/2,(y0+y1)/2
+def _hip_roof(x0,y0,x1,y1,base_z,apex_z,color,
+              name='Roof',legendgroup=None) -> go.Mesh3d:
+    cx,cy=(x0+x1)/2,(y0+y1)/2
     vx=[x0,x1,x1,x0,cx]; vy=[y0,y0,y1,y1,cy]; vz=[base_z]*4+[apex_z]
-    fi=[0,1,2,3]; fj=[1,2,3,0]; fk=[4,4,4,4]
-    return go.Mesh3d(x=vx,y=vy,z=vz,i=fi,j=fj,k=fk,
-                     color=color, opacity=0.97, name=name,
-                     showlegend=False,
-                     legendgroup=legendgroup or name,
-                     flatshading=True)
+    return go.Mesh3d(x=vx,y=vy,z=vz,i=[0,1,2,3],j=[1,2,3,0],k=[4,4,4,4],
+                     color=color,opacity=0.97,name=name,showlegend=False,
+                     legendgroup=legendgroup or name,flatshading=True)
 
-def _cylinder_surface(cx,cy, r, z_bot, z_top, color, name,
-                      n=20, show_legend=True, legendgroup=None) -> go.Surface:
-    theta = np.linspace(0,2*np.pi,n)
-    z     = np.array([z_bot, z_top])
-    T,Z   = np.meshgrid(theta,z)
-    return go.Surface(x=cx+r*np.cos(T), y=cy+r*np.sin(T), z=Z,
-                      colorscale=[[0,color],[1,color]],
-                      showscale=False, opacity=0.92,
-                      name=name, showlegend=show_legend,
+def _cylinder(cx,cy,r,z0,z1,color,name,n=20,
+              show_legend=True,legendgroup=None) -> go.Surface:
+    t=np.linspace(0,2*np.pi,n); z=np.array([z0,z1])
+    T,Z=np.meshgrid(t,z)
+    return go.Surface(x=cx+r*np.cos(T),y=cy+r*np.sin(T),z=Z,
+                      colorscale=[[0,color],[1,color]],showscale=False,
+                      opacity=0.92,name=name,showlegend=show_legend,
                       legendgroup=legendgroup or name)
 
-def _cone_mesh(cx,cy, r, z_bot, z_top, color, name,
-               n=18, show_legend=False, legendgroup=None) -> go.Mesh3d:
-    theta = np.linspace(0,2*np.pi,n,endpoint=False)
-    vx = list(cx+r*np.cos(theta))+[cx]
-    vy = list(cy+r*np.sin(theta))+[cy]
-    vz = [z_bot]*n+[z_top]
-    apex=n
-    fi=list(range(n)); fj=[(k+1)%n for k in range(n)]; fk=[apex]*n
+def _cone(cx,cy,r,z0,z1,color,name,n=18,
+          show_legend=False,legendgroup=None) -> go.Mesh3d:
+    t=np.linspace(0,2*np.pi,n,endpoint=False)
+    vx=list(cx+r*np.cos(t))+[cx]; vy=list(cy+r*np.sin(t))+[cy]
+    vz=[z0]*n+[z1]
+    fi=list(range(n)); fj=[(k+1)%n for k in range(n)]; fk=[n]*n
     return go.Mesh3d(x=vx,y=vy,z=vz,i=fi,j=fj,k=fk,
-                     color=color, opacity=0.88, name=name,
-                     showlegend=show_legend,
-                     legendgroup=legendgroup or name,
+                     color=color,opacity=0.88,name=name,
+                     showlegend=show_legend,legendgroup=legendgroup or name,
                      flatshading=True)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Tree species catalogue  (trunk_h, canopy_bot, canopy_top, canopy_r, color)
-# ─────────────────────────────────────────────────────────────────────────────
-TREE_SPECS = {
-    'Mango':     dict(trunk_h=6,  canopy_bot=6,  canopy_top=20, canopy_r=8,  trunk_r=1.1, color='#2E7D32'),
-    'Jackfruit': dict(trunk_h=8,  canopy_bot=8,  canopy_top=26, canopy_r=9,  trunk_r=1.3, color='#1B5E20'),
-    'Coconut':   dict(trunk_h=20, canopy_bot=20, canopy_top=30, canopy_r=6,  trunk_r=0.8, color='#388E3C'),
-    'Banana':    dict(trunk_h=4,  canopy_bot=4,  canopy_top=12, canopy_r=5,  trunk_r=1.5, color='#558B2F'),
-    'Guava':     dict(trunk_h=4,  canopy_bot=4,  canopy_top=14, canopy_r=5,  trunk_r=0.8, color='#33691E'),
-    'Papaya':    dict(trunk_h=5,  canopy_bot=5,  canopy_top=13, canopy_r=4,  trunk_r=0.6, color='#43A047'),
-    'Citrus':    dict(trunk_h=4,  canopy_bot=4,  canopy_top=12, canopy_r=5,  trunk_r=0.7, color='#66BB6A'),
-    'Avocado':   dict(trunk_h=7,  canopy_bot=7,  canopy_top=18, canopy_r=7,  trunk_r=1.0, color='#2E7D32'),
-}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Path building helper
-# ─────────────────────────────────────────────────────────────────────────────
-def _path_box(x0,y0, x1,y1, width, terrain_z, color='#D7CCC8',
-              name='Path', show_legend=False, legendgroup='Paths') -> List:
+def _path_slab(x0,y0,x1,y1,width,tz,color='#D7CCC8',
+               name='Path',show_legend=False,lg='Paths') -> List:
     """
-    Build a wide 3D path (gravel slab) between two points.
-    Returns list of Mesh3d traces.
+    Axis-aligned path slab between two points.
+    Always uses L-shaped routing (horizontal then vertical),
+    so no diagonal paths that cut through diagonal space.
+    Returns list of Mesh3d traces for TWO segments: H + V.
     """
-    dx,dy = x1-x0, y1-y0
-    dist  = max(np.hypot(dx,dy),1e-6)
-    nx,ny = -dy/dist*width/2, dx/dist*width/2   # perpendicular offset
-
-    # Four corners of the path slab
-    corners_x = [x0+nx, x0-nx, x1-nx, x1+nx]
-    corners_y = [y0+ny, y0-ny, y1-ny, y1+ny]
-    z_surf    = terrain_z + 0.05   # just above terrain
-
-    # Two triangles make the quad
     traces = []
-    for (ia,ib,ic) in [(0,1,2),(0,2,3)]:
-        traces.append(go.Mesh3d(
-            x=[corners_x[ia],corners_x[ib],corners_x[ic]],
-            y=[corners_y[ia],corners_y[ib],corners_y[ic]],
-            z=[z_surf,z_surf,z_surf],
-            i=[0],j=[1],k=[2],
-            color=color, opacity=0.85,
-            name=name, showlegend=show_legend and ia==0,
-            legendgroup=legendgroup,
-            flatshading=True,
+    pw = width
+
+    # Segment 1: horizontal (x0,y0) → (x1,y0)
+    # Segment 2: vertical   (x1,y0) → (x1,y1)
+    # This makes an L-shape that hugs axes.
+    for seg_x0,seg_y0,seg_x1,seg_y1 in [
+        (min(x0,x1)-pw/2, min(y0,y0)-pw/2,
+         max(x0,x1)+pw/2, min(y0,y0)+pw/2),   # H segment
+        (x1-pw/2, min(y0,y1)-pw/2,
+         x1+pw/2, max(y0,y1)+pw/2),            # V segment
+    ]:
+        if abs(seg_x1-seg_x0)<0.5 or abs(seg_y1-seg_y0)<0.5:
+            continue
+        # Surface quad for path
+        nx=int(max(2,abs(seg_x1-seg_x0)/10))
+        ny=int(max(2,abs(seg_y1-seg_y0)/10))
+        xs=np.linspace(seg_x0,seg_x1,nx)
+        ys=np.linspace(seg_y0,seg_y1,ny)
+        Xg,Yg=np.meshgrid(xs,ys)
+        Zg=np.full_like(Xg, tz+0.06)
+        traces.append(go.Surface(
+            x=Xg,y=Yg,z=Zg,
+            colorscale=[[0,color],[1,'#BCAAA4']],
+            showscale=False,opacity=0.88,
+            name=name,showlegend=show_legend,
+            legendgroup=lg,
         ))
-        show_legend=False   # only show for first triangle
+        show_legend=False
     return traces
+
+
+def _spine_slab(x0,y0,x1,y1,width,tz,
+                color='#D7CCC8',name='Road',lg='Roads') -> go.Surface:
+    """Full spine road as a flat Surface (no L-shape)."""
+    if x0==x1:   # vertical
+        xs=np.linspace(x0-width/2,x0+width/2,4)
+        ys=np.linspace(min(y0,y1),max(y0,y1),max(4,int(abs(y1-y0)/10)))
+    else:         # horizontal
+        xs=np.linspace(min(x0,x1),max(x0,x1),max(4,int(abs(x1-x0)/10)))
+        ys=np.linspace(y0-width/2,y0+width/2,4)
+    Xg,Yg=np.meshgrid(xs,ys)
+    Zg=np.full_like(Xg,tz+0.04)
+    return go.Surface(x=Xg,y=Yg,z=Zg,
+                      colorscale=[[0,color],[1,'#BCAAA4']],
+                      showscale=False,opacity=0.90,
+                      name=name,showlegend=True,legendgroup=lg)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -186,10 +222,6 @@ def _path_box(x0,y0, x1,y1, width, terrain_z, color='#D7CCC8',
 # ─────────────────────────────────────────────────────────────────────────────
 class Visualizer3D:
 
-    ZONE_COLORS = {
-        'z0':'#F5F5DC','z1':'#C8E6C9','z2':'#228B22',
-        'z3':'#F0E68C','z4':'#DDA0DD',
-    }
     ZONE_NAMES = {
         'z0':'Zone 0 – Residential','z1':'Zone 1 – Kitchen Garden',
         'z2':'Zone 2 – Food Forest','z3':'Zone 3 – Pasture / Crops',
@@ -197,377 +229,156 @@ class Visualizer3D:
     }
 
     def create(self, layout: Dict[str,Any]) -> go.Figure:
-        self._reg   = _CollisionRegistry()
-        self._L     = layout['dimensions']['L']
-        self._W     = layout['dimensions']['W']
-        self._slope = layout.get('slope','Flat')
-        self._layout= layout
+        self._reg    = _CollisionRegistry()
+        self._L      = layout['dimensions']['L']
+        self._W      = layout['dimensions']['W']
+        self._slope  = layout.get('slope','Flat')
+        self._layout = layout
 
         fig = go.Figure()
 
-        # ── Layer order ───────────────────────────────────────────────────
+        # ── STRICT ORDER: roads first, features second, trees last ──────
         self._add_terrain(fig)
         self._add_zones(fig)
-        self._add_kitchen_garden_detail(fig)
-        self._add_paths_network(fig)         # dynamic paths
+        self._add_spine_roads(fig)          # Step 1: roads registered
+        self._add_house(fig)                # Step 2a: house registered
+        self._add_kitchen_garden(fig)       # Step 2b: always visible
         self._add_water_features(fig)
         self._add_solar(fig)
         self._add_greenhouse(fig)
         self._add_rain_tank(fig)
-        self._add_house(fig)                 # Option-B realistic house
         self._add_all_livestock(fig)
-        self._add_trees(fig)
+        self._add_feature_spurs(fig)        # Step 2c: spur paths per feature
+        self._add_trees(fig)                # Step 3: trees last
 
         self._configure_layout(fig)
         return fig
 
-    # ── Terrain ──────────────────────────────────────────────────────────────
-    def _terrain_z(self, x, y) -> float:
-        """Scalar terrain height at point (x,y)."""
-        s = self._slope
-        L,W = self._L, self._W
-        if s=='South':  return y*0.03
-        if s=='North':  return (W-y)*0.03
-        if s=='East':   return x*0.03
-        if s=='West':   return (L-x)*0.03
+    # ── Terrain Z helpers ─────────────────────────────────────────────────────
+    def _tz(self, x, y) -> float:
+        s,L,W = self._slope, self._L, self._W
+        if s=='South': return y*0.03
+        if s=='North': return (W-y)*0.03
+        if s=='East':  return x*0.03
+        if s=='West':  return (L-x)*0.03
         return 0.0
 
-    def _terrain_z_grid(self, X, Y):
-        s = self._slope
-        L,W = self._L, self._W
-        if s=='South':  return Y*0.03
-        if s=='North':  return (W-Y)*0.03
-        if s=='East':   return X*0.03
-        if s=='West':   return (L-X)*0.03
+    def _tz_grid(self, X, Y):
+        s,L,W = self._slope, self._L, self._W
+        if s=='South': return Y*0.03
+        if s=='North': return (W-Y)*0.03
+        if s=='East':  return X*0.03
+        if s=='West':  return (L-X)*0.03
         return np.zeros_like(X)
 
+    # ── Terrain ───────────────────────────────────────────────────────────────
     def _add_terrain(self, fig):
-        L,W = self._L,self._W
-        x = np.linspace(0,L,40)
-        y = np.linspace(0,W,40)
-        X,Y = np.meshgrid(x,y)
-        Z   = self._terrain_z_grid(X,Y)
-
-        # Grass-like green gradient
+        L,W=self._L,self._W
+        x=np.linspace(0,L,40); y=np.linspace(0,W,40)
+        X,Y=np.meshgrid(x,y); Z=self._tz_grid(X,Y)
         fig.add_trace(go.Surface(
             x=X,y=Y,z=Z,
-            colorscale=[
-                [0.0,'#33691E'],[0.3,'#558B2F'],
-                [0.6,'#7CB342'],[1.0,'#9CCC65'],
-            ],
-            showscale=False, opacity=0.90,
-            name='Terrain', showlegend=True,
-            legendgroup='Terrain',
-            lighting=dict(ambient=0.7,diffuse=0.85),
-            contours=dict(
-                z=dict(show=True,color='#2E7D32',width=1,
-                       start=Z.min(),end=Z.max(),size=(Z.max()-Z.min()+0.01)/5)
-            ),
+            colorscale=[[0,'#33691E'],[0.35,'#558B2F'],
+                        [0.65,'#7CB342'],[1,'#9CCC65']],
+            showscale=False,opacity=0.88,
+            name='Terrain',showlegend=True,legendgroup='Terrain',
+            lighting=dict(ambient=0.70,diffuse=0.85),
+            contours=dict(z=dict(show=True,color='#2E7D32',
+                                 width=1,start=Z.min(),
+                                 end=Z.max(),
+                                 size=max(0.01,(Z.max()-Z.min()+0.01)/5))),
         ))
 
-    # ── Zone slabs ────────────────────────────────────────────────────────────
+    # ── Zones ─────────────────────────────────────────────────────────────────
     def _add_zones(self, fig):
-        zone_surface_colors = {
-            'z0': [[0,'#F5F5DC'],[1,'#FFFDE7']],    # Residential - beige
-            'z1': [[0,'#A5D6A7'],[1,'#E8F5E9']],    # Kitchen - light green
-            'z2': [[0,'#1B5E20'],[1,'#388E3C']],    # Forest - dark green
-            'z3': [[0,'#F9A825'],[1,'#FFF9C4']],    # Pasture - yellow
-            'z4': [[0,'#CE93D8'],[1,'#F3E5F5']],    # Buffer - purple
+        zone_cs = {
+            'z0':[[0,'#FFF9C4'],[1,'#FFFDE7']],
+            'z1':[[0,'#A5D6A7'],[1,'#C8E6C9']],
+            'z2':[[0,'#1B5E20'],[1,'#2E7D32']],
+            'z3':[[0,'#F9A825'],[1,'#FFF9C4']],
+            'z4':[[0,'#CE93D8'],[1,'#EDE7F6']],
         }
-
-        for zone_id, pos in self._layout.get('zone_positions',{}).items():
-            x0,y0 = pos['x'],pos['y']
-            x1,y1 = x0+pos['width'],y0+pos['height']
-            slab_h = 1.2
-
-            # Use a small surface grid to give it texture
-            nx,ny = 6,6
-            xs = np.linspace(x0,x1,nx)
-            ys = np.linspace(y0,y1,ny)
-            Xg,Yg = np.meshgrid(xs,ys)
-            Zg    = self._terrain_z_grid(Xg,Yg) + slab_h
-
-            # Add subtle bumps for realism
-            if zone_id in ('z2','z3'):
-                np.random.seed(hash(zone_id)%100)
-                Zg += np.random.uniform(0,0.4,Zg.shape)
-
+        for zid,pos in self._layout.get('zone_positions',{}).items():
+            x0,y0=pos['x'],pos['y']
+            x1,y1=x0+pos['width'],y0+pos['height']
+            nx=max(4,int(pos['width']/20)); ny=max(4,int(pos['height']/20))
+            xs=np.linspace(x0,x1,nx); ys=np.linspace(y0,y1,ny)
+            Xg,Yg=np.meshgrid(xs,ys)
+            Zg=self._tz_grid(Xg,Yg)+1.1
+            if zid in('z2','z3'):
+                np.random.seed(hash(zid)%100)
+                Zg+=np.random.uniform(0,0.3,Zg.shape)
             fig.add_trace(go.Surface(
                 x=Xg,y=Yg,z=Zg,
-                colorscale=zone_surface_colors.get(zone_id,[[0,'#CCCCCC'],[1,'#EEEEEE']]),
-                showscale=False, opacity=0.55,
-                name=self.ZONE_NAMES.get(zone_id,zone_id),
-                showlegend=True,
-                legendgroup=zone_id,
+                colorscale=zone_cs.get(zid,[[0,'#DDD'],[1,'#EEE']]),
+                showscale=False,opacity=0.50,
+                name=self.ZONE_NAMES.get(zid,zid),
+                showlegend=True,legendgroup=zid,
             ))
 
-    # ── Kitchen Garden detail ─────────────────────────────────────────────────
-    def _add_kitchen_garden_detail(self, fig):
-        zones = self._layout.get('zone_positions',{})
-        if 'z1' not in zones: return
-        pos = zones['z1']
-        x0,y0 = pos['x'],pos['y']
-        w,h   = pos['width'],pos['height']
-        base  = self._terrain_z(x0+w/2,y0+h/2)+1.3
-
-        bed_w   = min(w*0.20, 25)
-        bed_gap = min(w*0.05,  8)
-        n_beds  = max(1, int((w-bed_gap) / (bed_w+bed_gap)))
-
-        for i in range(n_beds):
-            bx0 = x0 + bed_gap + i*(bed_w+bed_gap)
-            bx1 = bx0+bed_w
-            by0 = y0+5; by1 = y0+h-5
-            if bx1 > x0+w-bed_gap: break
-
-            # Soil bed (dark brown raised slab)
-            fig.add_trace(_box(
-                bx0,by0,base, bx1,by1,base+0.6,
-                color='#5D4037', name='Raised Bed' if i==0 else '',
-                opacity=0.92,
-                show_legend=(i==0), legendgroup='Kitchen Garden',
-            ))
-
-            # Plant rows on top of bed
-            n_rows = max(1,int((by1-by0)/8))
-            for r in range(n_rows):
-                ry = by0+4+r*((by1-by0-8)/max(n_rows-1,1))
-                # Small green mounds = plants
-                plant_color = ['#4CAF50','#8BC34A','#CDDC39'][r%3]
-                for px_off in np.linspace(bx0+2,bx1-2,5):
-                    fig.add_trace(_cone_mesh(
-                        px_off, ry, 1.5, base+0.6, base+2.5,
-                        color=plant_color,
-                        name='Vegetable Plants' if (i==0 and r==0) else '',
-                        show_legend=(i==0 and r==0),
-                        legendgroup='Kitchen Garden',
-                    ))
-
-            # Path between beds (gravel strip)
-            if i < n_beds-1:
-                gx0 = bx1; gx1 = bx0+bed_w+bed_gap
-                for t in _path_box(gx0,by0, gx1,by1, bed_gap*0.8,
-                                   base, color='#BCAAA4',
-                                   name='Garden Path',
-                                   show_legend=(i==0),
-                                   legendgroup='Kitchen Garden'):
-                    fig.add_trace(t)
-
-    # ── Dynamic path network ──────────────────────────────────────────────────
-    def _add_paths_network(self, fig):
+    # ── STEP 1: Spine roads — registered FIRST ────────────────────────────────
+    def _add_spine_roads(self, fig):
         """
-        Build a path from the house entrance to EVERY feature the user selected.
-        Path goes: house_door → nearest cross-point → feature centre.
+        Road network:
+          - Perimeter road (inner boundary, ~12ft from edge)
+          - Main N-S spine through house door
+          - Main E-W spine at house mid-height
+        All segments are registered in collision registry immediately.
         """
-        features = self._layout.get('features',{})
-        hx,hy,hw,hd = self._house_bbox()
-        door_x = hx+hw/2
-        door_y = hy           # south face of house
-
-        path_w   = 8.0        # ft width of paths
-        path_col = '#D7CCC8'
-        base_z   = self._terrain_z(door_x,door_y)
-        show_leg = True
-
-        # Main entrance path (house south → property south boundary)
-        for t in _path_box(door_x,0, door_x,door_y, path_w, base_z,
-                           color=path_col, name='Access Path',
-                           show_legend=show_leg, legendgroup='Paths'):
-            fig.add_trace(t)
-        show_leg = False
-
-        # Cross path at house mid-level
-        cross_y = hy+hd*0.5
-        for t in _path_box(0,cross_y, self._L,cross_y, path_w, base_z,
-                           color=path_col, name='Access Path',
-                           show_legend=False, legendgroup='Paths'):
-            fig.add_trace(t)
-
-        # For each feature, draw a path from house to feature centre
-        feature_centres = self._get_feature_centres(features, hx,hy,hw,hd)
-
-        for feat_name,(fx,fy) in feature_centres.items():
-            tz = self._terrain_z((door_x+fx)/2,(cross_y+fy)/2)
-            # L-shaped path: house → cross point → feature
-            mid_x,mid_y = fx, cross_y   # bend point
-            for t in _path_box(door_x,cross_y, mid_x,mid_y, path_w*0.7, tz,
-                               color='#BCAAA4', name='Access Path',
-                               show_legend=False, legendgroup='Paths'):
-                fig.add_trace(t)
-            for t in _path_box(mid_x,mid_y, fx,fy, path_w*0.7, tz,
-                               color='#BCAAA4', name='Access Path',
-                               show_legend=False, legendgroup='Paths'):
-                fig.add_trace(t)
-
-    def _get_feature_centres(self, features, hx,hy,hw,hd):
-        centres = {}
-        def _fc(key):
-            f = features.get(key,{})
-            if not f: return None
-            if 'radius' in f: return (f['x'],f['y'])
-            return (f['x']+f.get('width',20)/2, f['y']+f.get('height',20)/2)
-
-        for key in ('pond','borewell','well','solar','greenhouse','rain_tank',
-                    'goat_shed','chicken_coop','piggery','cow_shed',
-                    'fish_tanks','bee_hives'):
-            c = _fc(key)
-            if c: centres[key] = c
-        return centres
-
-    # ── Water features ────────────────────────────────────────────────────────
-    def _add_water_features(self, fig):
-        features = self._layout.get('features',{})
-
-        if 'pond' in features:
-            f = features['pond']
-            r = f['radius']
-            base = self._terrain_z(f['x'],f['y'])
-            self._reg.force_register_circle(f['x'],f['y'],r)
-
-            # Pond depression
-            rg = np.linspace(0,r,12)
-            tg = np.linspace(0,2*np.pi,40)
-            R,T = np.meshgrid(rg,tg)
-            # Natural irregular shape
-            irregularity = 1+0.12*np.sin(3*T)+0.08*np.cos(5*T)
-            Xp = f['x']+R*np.cos(T)*irregularity
-            Yp = f['y']+R*np.sin(T)*irregularity
-            Zp = base-1.0+R/r*0.8   # slopes up toward edges
-
-            fig.add_trace(go.Surface(
-                x=Xp,y=Yp,z=Zp,
-                colorscale=[[0,'#01579B'],[0.4,'#0288D1'],
-                            [0.7,'#4FC3F7'],[1,'#B3E5FC']],
-                showscale=False, opacity=0.88,
-                name='Pond / Aquaculture', showlegend=True,
-                legendgroup='Pond',
-            ))
-            # Pond rim (slightly raised bank)
-            rim_r = r*1.08
-            rim_t = np.linspace(0,2*np.pi,40)
-            fig.add_trace(go.Scatter3d(
-                x=f['x']+rim_r*np.cos(rim_t),
-                y=f['y']+rim_r*np.sin(rim_t),
-                z=[base+0.2]*40,
-                mode='lines',
-                line=dict(color='#5D4037',width=4),
-                name='Pond Rim', showlegend=False,
-                legendgroup='Pond',
-            ))
-
-        for key in ('borewell','well'):
-            if key in features:
-                f = features[key]
-                r = f.get('radius',4)
-                base = self._terrain_z(f['x'],f['y'])
-                self._reg.force_register_circle(f['x'],f['y'],r)
-
-                fig.add_trace(_cylinder_surface(
-                    f['x'],f['y'], r, base, base+5,
-                    color='#546E7A', name='Borewell',
-                    show_legend=True, legendgroup='Borewell',
-                ))
-                # Water inside
-                fig.add_trace(_cylinder_surface(
-                    f['x'],f['y'], r*0.85, base, base+3.5,
-                    color='#4FC3F7', name='Borewell Water',
-                    show_legend=False, legendgroup='Borewell',
-                ))
-                break
-
-    # ── Solar panels ───────────────────────────────────────────────────────────
-    def _add_solar(self, fig):
-        f = self._layout.get('features',{}).get('solar')
-        if not f: return
-        base = self._terrain_z(f['x']+f['width']/2, f['y']+f['height']/2)+1.5
-
-        if not self._reg.rect_clear(f['x'],f['y'],f['x']+f['width'],f['y']+f['height']):
-            return
-        self._reg.register_rect(f['x'],f['y'],f['x']+f['width'],f['y']+f['height'])
-
-        # Frame
-        fig.add_trace(_box(f['x'],f['y'],base,
-                           f['x']+f['width'],f['y']+f['height'],base+0.3,
-                           color='#607D8B', name='Solar Frame',
-                           opacity=0.95, show_legend=False,
-                           legendgroup='Solar'))
-
-        rows,cols,gap = 2,3,1.5
-        cw = (f['width']-gap*(cols+1))/cols
-        ch = (f['height']-gap*(rows+1))/rows
-        show_leg = True
-        for row in range(rows):
-            for col in range(cols):
-                px = f['x']+gap+col*(cw+gap)
-                py = f['y']+gap+row*(ch+gap)
-                fig.add_trace(_box(
-                    px,py,base+0.25, px+cw,py+ch,base+0.55,
-                    color='#1565C0', name='Solar Panels',
-                    opacity=0.97, show_legend=show_leg,
-                    legendgroup='Solar',
-                ))
-                show_leg=False
-                # Cell lines as scatter
-                for gi in [1,2]:
-                    fig.add_trace(go.Scatter3d(
-                        x=[px+gi*cw/3,px+gi*cw/3],y=[py,py+ch],
-                        z=[base+0.56,base+0.56],
-                        mode='lines', line=dict(color='#1976D2',width=1),
-                        showlegend=False, legendgroup='Solar',
-                    ))
-
-    # ── Greenhouse ────────────────────────────────────────────────────────────
-    def _add_greenhouse(self, fig):
-        f = self._layout.get('features',{}).get('greenhouse')
-        if not f: return
-        base = self._terrain_z(f['x']+f['width']/2,f['y']+f['height']/2)+1.5
-
-        if not self._reg.rect_clear(f['x'],f['y'],f['x']+f['width'],f['y']+f['height']):
-            return
-        self._reg.register_rect(f['x'],f['y'],f['x']+f['width'],f['y']+f['height'])
-
-        gh_h = 8.0
-        # Glass walls (semi-transparent)
-        fig.add_trace(_box(f['x'],f['y'],base,
-                           f['x']+f['width'],f['y']+f['height'],base+gh_h,
-                           color='#E0F2F1', name='Greenhouse',
-                           opacity=0.30, show_legend=True,
-                           legendgroup='Greenhouse'))
-        # Ridge roof
-        fig.add_trace(_hip_roof(
-            f['x'],f['y'],f['x']+f['width'],f['y']+f['height'],
-            base_z=base+gh_h,
-            apex_z=base+gh_h+f['width']*0.28,
-            color='#80CBC4', legendgroup='Greenhouse',
-        ))
-        # Internal plant beds
-        bed_z = base+0.5
-        for side_y in [f['y']+4, f['y']+f['height']-12]:
-            fig.add_trace(_box(f['x']+4,side_y,bed_z,
-                               f['x']+f['width']-4,side_y+8,bed_z+0.8,
-                               color='#5D4037', name='GH Bed',
-                               opacity=0.90, show_legend=False,
-                               legendgroup='Greenhouse'))
-
-    # ── Rain tank ──────────────────────────────────────────────────────────────
-    def _add_rain_tank(self, fig):
-        f = self._layout.get('features',{}).get('rain_tank')
-        if not f: return
-        base = self._terrain_z(f['x']+f['width']/2,f['y']+f['height']/2)+1.5
-        if not self._reg.rect_clear(f['x'],f['y'],f['x']+f['width'],f['y']+f['height']):
-            return
-        self._reg.register_rect(f['x'],f['y'],f['x']+f['width'],f['y']+f['height'])
-        fig.add_trace(_box(f['x'],f['y'],base,
-                           f['x']+f['width'],f['y']+f['height'],base+6.0,
-                           color='#4FC3F7', name='Rain Tank',
-                           opacity=0.80, show_legend=True,
-                           legendgroup='Rain Tank'))
-
-    # ── House — Option B: realistic 3D exterior ────────────────────────────────
-    def _house_bbox(self):
         L,W = self._L,self._W
-        pos = self._layout.get('house_position','Center')
-        positions = {
+        hx,hy,hw,hd = self._house_bbox()
+        door_cx = hx+hw/2
+        cross_y  = hy+hd*0.5
+        main_w   = 10.0   # ft wide main road
+        peri_w   = 8.0    # ft wide perimeter road
+        peri_off = 12.0   # ft from boundary
+        tz_mid   = self._tz(L/2,W/2)
+        shown    = False
+
+        # ── Perimeter road ──────────────────────────────────────────────
+        peri_segs = [
+            # South edge
+            (peri_off, peri_off,  L-peri_off, peri_off, False),
+            # North edge
+            (peri_off, W-peri_off,L-peri_off, W-peri_off, False),
+            # West edge
+            (peri_off, peri_off,  peri_off,   W-peri_off, False),
+            # East edge
+            (L-peri_off,peri_off, L-peri_off, W-peri_off, False),
+        ]
+        for (sx0,sy0,sx1,sy1,_) in peri_segs:
+            # Register perimeter road rectangles
+            if sx0==sx1:  # vertical
+                self._reg.register_rect(sx0-peri_w/2,sy0,sx0+peri_w/2,sy1)
+            else:         # horizontal
+                self._reg.register_rect(sx0,sy0-peri_w/2,sx1,sy0+peri_w/2)
+            tz=self._tz((sx0+sx1)/2,(sy0+sy1)/2)
+            fig.add_trace(_spine_slab(sx0,sy0,sx1,sy1,peri_w,tz,
+                                      name='Perimeter Road',lg='Roads'))
+
+        # ── Main N-S spine (house entrance → south boundary) ─────────────
+        self._reg.register_rect(door_cx-main_w/2, 0, door_cx+main_w/2, hy)
+        fig.add_trace(_spine_slab(door_cx,0,door_cx,hy,main_w,
+                                  self._tz(door_cx,hy/2),
+                                  name='Main Road',lg='Roads'))
+
+        # ── Main E-W cross road ───────────────────────────────────────────
+        self._reg.register_rect(0,cross_y-main_w/2,L,cross_y+main_w/2)
+        fig.add_trace(_spine_slab(0,cross_y,L,cross_y,main_w,
+                                  self._tz(L/2,cross_y),
+                                  name='Main Road',lg='Roads'))
+
+        # ── N-S spine top section (above house to north boundary) ─────────
+        self._reg.register_rect(door_cx-main_w/2,hy+hd,door_cx+main_w/2,W)
+        fig.add_trace(_spine_slab(door_cx,hy+hd,door_cx,W,main_w,
+                                  self._tz(door_cx,(hy+hd+W)/2),
+                                  name='Main Road',lg='Roads'))
+
+    # ── STEP 2a: House (registered after roads) ───────────────────────────────
+    def _house_bbox(self):
+        L,W=self._L,self._W
+        pos=self._layout.get('house_position','Center')
+        p={
             'North':        (L*0.30,W*0.82,L*0.40,W*0.12),
             'South':        (L*0.30,W*0.06,L*0.40,W*0.12),
             'East':         (L*0.75,W*0.35,L*0.20,W*0.30),
@@ -575,138 +386,205 @@ class Visualizer3D:
             'Center':       (L*0.35,W*0.40,L*0.30,W*0.20),
             'Not built yet':(L*0.35,W*0.40,L*0.30,W*0.20),
         }
-        return positions.get(pos,positions['Center'])
+        return p.get(pos,p['Center'])
 
     def _add_house(self, fig):
-        hx,hy,hw,hd = self._house_bbox()
-        base   = self._terrain_z(hx+hw/2,hy+hd/2)+1.5
-        wall_h = 10.0
-        roof_b = base+wall_h
-        roof_t = roof_b+min(hw,hd)*0.42
+        hx,hy,hw,hd=self._house_bbox()
+        base=self._tz(hx+hw/2,hy+hd/2)+1.5
+        wall_h=10.0; roof_b=base+wall_h
+        roof_t=roof_b+min(hw,hd)*0.42
+        wall_t=0.6
+        self._reg.register_rect(hx,hy,hx+hw,hy+hd)
+        lg='House'
 
-        self._reg.force_register_rect(hx,hy,hx+hw,hy+hd)
-
-        # ── Foundation slab ───────────────────────────────────────────────
-        fig.add_trace(_box(hx-0.5,hy-0.5,base-0.5,
-                           hx+hw+0.5,hy+hd+0.5,base,
-                           color='#BCAAA4', name='Foundation',
-                           opacity=0.95, show_legend=False,
-                           legendgroup='House'))
-
-        # ── Walls (4 faces separately for window cutouts look) ────────────
-        wall_t = 0.6   # wall thickness
-
-        # South wall (front)
-        fig.add_trace(_box(hx,hy,base, hx+hw,hy+wall_t,roof_b,
-                           color='#D7CCC8', name='House',
-                           opacity=0.97, show_legend=True,
-                           legendgroup='House'))
-        # North wall
-        fig.add_trace(_box(hx,hy+hd-wall_t,base, hx+hw,hy+hd,roof_b,
-                           color='#BCAAA4', name='House',
-                           opacity=0.97, show_legend=False,
-                           legendgroup='House'))
-        # West wall
-        fig.add_trace(_box(hx,hy,base, hx+wall_t,hy+hd,roof_b,
-                           color='#D7CCC8', name='House',
-                           opacity=0.97, show_legend=False,
-                           legendgroup='House'))
-        # East wall
-        fig.add_trace(_box(hx+hw-wall_t,hy,base, hx+hw,hy+hd,roof_b,
-                           color='#BCAAA4', name='House',
-                           opacity=0.97, show_legend=False,
-                           legendgroup='House'))
-        # Interior floor (ceiling visible from above)
+        # Foundation
+        fig.add_trace(_box(hx-0.5,hy-0.5,base-0.5,hx+hw+0.5,hy+hd+0.5,base,
+                           '#BCAAA4','Foundation',0.95,False,lg))
+        # 4 walls
+        for (wx0,wy0,wx1,wy1,wc) in [
+            (hx,   hy,         hx+hw, hy+wall_t,     '#D7CCC8'),
+            (hx,   hy+hd-wall_t,hx+hw,hy+hd,         '#BCAAA4'),
+            (hx,   hy,         hx+wall_t,hy+hd,       '#D7CCC8'),
+            (hx+hw-wall_t,hy,  hx+hw, hy+hd,          '#BCAAA4'),
+        ]:
+            fig.add_trace(_box(wx0,wy0,base,wx1,wy1,roof_b,wc,'House',0.97,
+                               wx0==hx and wy0==hy,lg))  # showlegend only first
+        # Floor
         fig.add_trace(_box(hx+wall_t,hy+wall_t,base,
                            hx+hw-wall_t,hy+hd-wall_t,base+0.2,
-                           color='#EFEBE9', name='House Floor',
-                           opacity=0.95, show_legend=False,
-                           legendgroup='House'))
+                           '#EFEBE9','House Floor',0.95,False,lg))
+        # Windows south
+        ww,wh=hw*0.13,wall_h*0.30; wz=base+wall_h*0.45
+        for wx in [hx+hw*0.18,hx+hw*0.70]:
+            fig.add_trace(_box(wx-0.15,hy-0.15,wz-0.15,wx+ww+0.15,hy+wall_t+0.15,wz+wh+0.15,
+                               '#5D4037','Window Frame',0.95,False,lg))
+            fig.add_trace(_box(wx,hy-0.1,wz,wx+ww,hy+wall_t+0.1,wz+wh,
+                               '#B3E5FC','Window',0.80,False,lg))
+        # Door
+        dw=hw*0.12; dx=hx+hw/2-dw/2
+        fig.add_trace(_box(dx,hy-0.15,base,dx+dw,hy+wall_t+0.15,base+wall_h*0.55,
+                           '#3E2723','Door',0.97,False,lg))
+        # Roof
+        fig.add_trace(_hip_roof(hx,hy,hx+hw,hy+hd,roof_b,roof_t,
+                                '#4E342E','Roof',lg))
+        # Chimney
+        cx2=hx+hw*0.72; cy2=hy+hd*0.4
+        cw2=hw*0.08; cd2=hd*0.08
+        fig.add_trace(_box(cx2,cy2,roof_b-1,cx2+cw2,cy2+cd2,roof_t+3,
+                           '#6D4C41','Chimney',0.97,False,lg))
+        # Porch
+        pw2=hw*0.45; pd2=hd*0.15
+        px2=hx+(hw-pw2)/2; py2=hy-pd2; pz2=base+wall_h*0.65
+        fig.add_trace(_box(px2,py2,pz2,px2+pw2,hy,pz2+0.4,
+                           '#EFEBE9','Porch',0.75,False,lg))
+        for col_x in [px2+pw2*0.10,px2+pw2*0.90]:
+            fig.add_trace(_cylinder(col_x,py2+pd2/2,0.5,base,pz2,
+                                    '#8D6E63','Porch Column',show_legend=False,legendgroup=lg))
 
-        # ── Windows (colored boxes inset into south wall) ─────────────────
-        win_w,win_h = hw*0.13, wall_h*0.30
-        win_z = base + wall_h*0.45
-        for wx in [hx+hw*0.18, hx+hw*0.72]:
-            fig.add_trace(_box(wx,hy-0.1,win_z,
-                               wx+win_w,hy+wall_t+0.1,win_z+win_h,
-                               color='#B3E5FC', name='Window',
-                               opacity=0.80, show_legend=False,
-                               legendgroup='House'))
-            # Window frame
-            fig.add_trace(_box(wx-0.15,hy-0.15,win_z-0.15,
-                               wx+win_w+0.15,hy+wall_t+0.15,win_z+win_h+0.15,
-                               color='#5D4037', name='Window Frame',
-                               opacity=0.95, show_legend=False,
-                               legendgroup='House'))
+    # ── STEP 2b: Kitchen Garden — always drawn regardless of collision ─────────
+    def _add_kitchen_garden(self, fig):
+        zones=self._layout.get('zone_positions',{})
+        if 'z1' not in zones: return
+        pos=zones['z1']
+        x0,y0=pos['x'],pos['y']
+        w,h=pos['width'],pos['height']
+        base=self._tz(x0+w/2,y0+h/2)+1.3
 
-        # North windows
-        for wx in [hx+hw*0.18, hx+hw*0.72]:
-            fig.add_trace(_box(wx,hy+hd-wall_t-0.1,win_z,
-                               wx+win_w,hy+hd+0.1,win_z+win_h,
-                               color='#B3E5FC', name='Window',
-                               opacity=0.80, show_legend=False,
-                               legendgroup='House'))
+        bed_w   = max(15,min(w*0.18,22))
+        bed_gap = max(6, min(w*0.04,10))
+        n_beds  = max(1,int((w-bed_gap)/(bed_w+bed_gap)))
+        show_bed=True
 
-        # ── Door (front face, dark brown) ─────────────────────────────────
-        dw = hw*0.12
-        dx = hx+hw/2-dw/2
-        fig.add_trace(_box(dx,hy-0.15,base,
-                           dx+dw,hy+wall_t+0.15,base+wall_h*0.55,
-                           color='#3E2723', name='Door',
-                           opacity=0.97, show_legend=False,
-                           legendgroup='House'))
-        # Door knob
-        knob_x = dx+dw*0.85
-        knob_y = hy
-        knob_z = base+wall_h*0.28
-        fig.add_trace(go.Scatter3d(
-            x=[knob_x],y=[knob_y],z=[knob_z],
-            mode='markers',
-            marker=dict(size=4,color='#FFD700',
-                        line=dict(color='black',width=1)),
-            name='Door Knob', showlegend=False,
-            legendgroup='House',
-        ))
+        path_col='#BCAAA4'
+        for i in range(n_beds):
+            bx0=x0+bed_gap+i*(bed_w+bed_gap)
+            bx1=bx0+bed_w
+            by0=y0+6; by1=y0+h-6
+            if bx1>x0+w-bed_gap: break
 
-        # ── Hip roof ──────────────────────────────────────────────────────
-        fig.add_trace(_hip_roof(hx,hy,hx+hw,hy+hd,
-                                base_z=roof_b, apex_z=roof_t,
-                                color='#4E342E', name='Roof',
-                                legendgroup='House'))
+            # Soil bed
+            fig.add_trace(_box(bx0,by0,base,bx1,by1,base+0.7,
+                               '#5D4037','Raised Bed',0.92,show_bed,
+                               'Kitchen Garden'))
+            show_bed=False
 
-        # ── Chimney ───────────────────────────────────────────────────────
-        chim_x = hx+hw*0.72; chim_y = hy+hd*0.4
-        chim_w = hw*0.08; chim_d = hd*0.08
-        fig.add_trace(_box(chim_x,chim_y,roof_b-1,
-                           chim_x+chim_w,chim_y+chim_d,roof_t+3,
-                           color='#6D4C41', name='Chimney',
-                           opacity=0.97, show_legend=False,
-                           legendgroup='House'))
+            # Plant cones on bed
+            n_rows=max(1,int((by1-by0)/9))
+            for ri in range(n_rows):
+                ry=by0+4+ri*((by1-by0-8)/max(n_rows-1,1))
+                for px_off in np.linspace(bx0+2,bx1-2,4):
+                    pc=['#4CAF50','#8BC34A','#CDDC39'][ri%3]
+                    fig.add_trace(_cone(px_off,ry,1.4,base+0.7,base+2.8,pc,
+                                        'Vegetable Plants',
+                                        n=10,show_legend=(i==0 and ri==0),
+                                        legendgroup='Kitchen Garden'))
 
-        # ── Porch (front canopy) ──────────────────────────────────────────
-        porch_w = hw*0.45; porch_d = hd*0.15
-        porch_x = hx+(hw-porch_w)/2
-        porch_y = hy-porch_d
-        porch_z = base+wall_h*0.65
-        fig.add_trace(_box(porch_x,porch_y,porch_z,
-                           porch_x+porch_w,hy,porch_z+0.4,
-                           color='#EFEBE9', name='Porch',
-                           opacity=0.75, show_legend=False,
-                           legendgroup='House'))
-        # Porch columns
-        for col_x in [porch_x+porch_w*0.1, porch_x+porch_w*0.9]:
-            fig.add_trace(_cylinder_surface(
-                col_x,porch_y+porch_d*0.5, 0.5,
-                base, porch_z,
-                color='#8D6E63', name='Porch Column',
-                show_legend=False, legendgroup='House',
-            ))
+            # Path strip between beds
+            if i<n_beds-1:
+                strip_x=bx1; strip_xend=bx1+bed_gap
+                xs=np.linspace(strip_x,strip_xend,3)
+                ys=np.linspace(by0,by1,max(3,int((by1-by0)/8)))
+                Xg,Yg=np.meshgrid(xs,ys)
+                Zg=np.full_like(Xg,base+0.05)
+                fig.add_trace(go.Surface(x=Xg,y=Yg,z=Zg,
+                                         colorscale=[[0,path_col],[1,'#D7CCC8']],
+                                         showscale=False,opacity=0.85,
+                                         name='Garden Path',showlegend=(i==0),
+                                         legendgroup='Kitchen Garden'))
+
+    # ── Water features ────────────────────────────────────────────────────────
+    def _add_water_features(self, fig):
+        features=self._layout.get('features',{})
+
+        if 'pond' in features:
+            f=features['pond']; r=f['radius']
+            base=self._tz(f['x'],f['y'])
+            if self._reg.circle_clear(f['x'],f['y'],r):
+                self._reg.register_circle(f['x'],f['y'],r)
+                rg=np.linspace(0,r,12); tg=np.linspace(0,2*np.pi,40)
+                R,T=np.meshgrid(rg,tg)
+                irr=1+0.12*np.sin(3*T)+0.08*np.cos(5*T)
+                Zp=base-1.0+R/r*0.8
+                fig.add_trace(go.Surface(
+                    x=f['x']+R*np.cos(T)*irr,y=f['y']+R*np.sin(T)*irr,z=Zp,
+                    colorscale=[[0,'#01579B'],[0.5,'#0288D1'],[1,'#4FC3F7']],
+                    showscale=False,opacity=0.88,
+                    name='Pond / Aquaculture',showlegend=True,legendgroup='Pond'))
+                # Rim
+                rim_r=r*1.06; rt=np.linspace(0,2*np.pi,40)
+                fig.add_trace(go.Scatter3d(
+                    x=f['x']+rim_r*np.cos(rt),y=f['y']+rim_r*np.sin(rt),
+                    z=[base+0.25]*40,mode='lines',
+                    line=dict(color='#5D4037',width=4),
+                    name='Pond Rim',showlegend=False,legendgroup='Pond'))
+
+        for key in('borewell','well'):
+            if key in features:
+                f=features[key]; r=f.get('radius',4)
+                base=self._tz(f['x'],f['y'])
+                if self._reg.circle_clear(f['x'],f['y'],r):
+                    self._reg.register_circle(f['x'],f['y'],r)
+                    fig.add_trace(_cylinder(f['x'],f['y'],r,base,base+5,
+                                            '#546E7A','Borewell',
+                                            show_legend=True,legendgroup='Borewell'))
+                    fig.add_trace(_cylinder(f['x'],f['y'],r*0.8,base,base+3.5,
+                                            '#4FC3F7','Borewell Water',
+                                            show_legend=False,legendgroup='Borewell'))
+                break
+
+    # ── Solar ─────────────────────────────────────────────────────────────────
+    def _add_solar(self, fig):
+        f=self._layout.get('features',{}).get('solar')
+        if not f: return
+        x0,y0,x1,y1=f['x'],f['y'],f['x']+f['width'],f['y']+f['height']
+        base=self._tz((x0+x1)/2,(y0+y1)/2)+1.5
+        if not self._reg.rect_clear(x0,y0,x1,y1): return
+        self._reg.register_rect(x0,y0,x1,y1)
+        fig.add_trace(_box(x0,y0,base,x1,y1,base+0.3,
+                           '#607D8B','Solar Frame',0.95,False,'Solar'))
+        rows,cols,gap=2,3,1.5
+        cw=(f['width']-gap*(cols+1))/cols; ch=(f['height']-gap*(rows+1))/rows
+        sl=True
+        for row in range(rows):
+            for col in range(cols):
+                px=x0+gap+col*(cw+gap); py=y0+gap+row*(ch+gap)
+                fig.add_trace(_box(px,py,base+0.25,px+cw,py+ch,base+0.55,
+                                   '#1565C0','Solar Panels',0.97,sl,'Solar'))
+                sl=False
+
+    # ── Greenhouse ────────────────────────────────────────────────────────────
+    def _add_greenhouse(self, fig):
+        f=self._layout.get('features',{}).get('greenhouse')
+        if not f: return
+        x0,y0,x1,y1=f['x'],f['y'],f['x']+f['width'],f['y']+f['height']
+        base=self._tz((x0+x1)/2,(y0+y1)/2)+1.5
+        if not self._reg.rect_clear(x0,y0,x1,y1): return
+        self._reg.register_rect(x0,y0,x1,y1)
+        gh_h=8.0
+        fig.add_trace(_box(x0,y0,base,x1,y1,base+gh_h,
+                           '#E0F2F1','Greenhouse',0.30,True,'Greenhouse'))
+        fig.add_trace(_hip_roof(x0,y0,x1,y1,base+gh_h,
+                                base+gh_h+f['width']*0.28,
+                                '#80CBC4','GH Roof','Greenhouse'))
+        for sy in [y0+4,y1-12]:
+            fig.add_trace(_box(x0+4,sy,base+0.5,x1-4,sy+8,base+1.3,
+                               '#5D4037','GH Bed',0.90,False,'Greenhouse'))
+
+    # ── Rain tank ─────────────────────────────────────────────────────────────
+    def _add_rain_tank(self, fig):
+        f=self._layout.get('features',{}).get('rain_tank')
+        if not f: return
+        x0,y0,x1,y1=f['x'],f['y'],f['x']+f['width'],f['y']+f['height']
+        base=self._tz((x0+x1)/2,(y0+y1)/2)+1.5
+        if not self._reg.rect_clear(x0,y0,x1,y1): return
+        self._reg.register_rect(x0,y0,x1,y1)
+        fig.add_trace(_box(x0,y0,base,x1,y1,base+6,'#4FC3F7',
+                           'Rain Tank',0.80,True,'Rain Tank'))
 
     # ── All livestock ─────────────────────────────────────────────────────────
     def _add_all_livestock(self, fig):
-        features = self._layout.get('features',{})
-
-        livestock_cfg = {
+        features=self._layout.get('features',{})
+        cfg={
             'goat_shed':    ('#FFCCBC','#4E342E','Goat Shed',    7.0),
             'chicken_coop': ('#FFF9C4','#F57F17','Chicken Coop', 5.0),
             'piggery':      ('#F8BBD0','#880E4F','Piggery',      6.0),
@@ -714,129 +592,180 @@ class Visualizer3D:
             'fish_tanks':   ('#B3E5FC','#0288D1','Fish Tanks',   2.5),
             'bee_hives':    ('#FFF176','#F9A825','Bee Hives',    3.5),
         }
-
-        for key,(wall_col,roof_col,label,shed_h) in livestock_cfg.items():
+        for key,(wc,rc,label,sh) in cfg.items():
             if key not in features: continue
-            f = features[key]
-            x0,y0 = f['x'],f['y']
-            x1,y1 = x0+f['width'],y0+f['height']
-            base   = self._terrain_z((x0+x1)/2,(y0+y1)/2)+1.5
-
-            if not self._reg.rect_clear(x0,y0,x1,y1):
-                continue
+            f=features[key]
+            x0,y0,x1,y1=f['x'],f['y'],f['x']+f['width'],f['y']+f['height']
+            base=self._tz((x0+x1)/2,(y0+y1)/2)+1.5
+            if not self._reg.rect_clear(x0,y0,x1,y1): continue
             self._reg.register_rect(x0,y0,x1,y1)
+            roof_b=base+sh; roof_t=roof_b+f['width']*0.25
+            fig.add_trace(_box(x0,y0,base,x1,y1,roof_b,wc,label,0.92,True,label))
+            fig.add_trace(_hip_roof(x0,y0,x1,y1,roof_b,roof_t,rc,label+' Roof',label))
+            if key=='fish_tanks':
+                fig.add_trace(_box(x0+2,y0+2,base+0.5,x1-2,y1-2,base+0.8,
+                                   '#4FC3F7','Fish Water',0.70,False,label))
+            if key=='bee_hives':
+                hw_e=max(10,(f['width']-5)/max(1,int(f['width']/15))-2)
+                n_h =max(1,int(f['width']/15))
+                for hi in range(n_h):
+                    hxe=x0+3+hi*(hw_e+2)
+                    fig.add_trace(_box(hxe,y0+2,base,hxe+hw_e,y1-2,base+3.5,
+                                       '#FFF176',f'Hive{hi+1}',0.95,False,label))
 
-            roof_b = base+shed_h
-            roof_t = roof_b+f['width']*0.25
+    # ── STEP 2c: Feature spur paths — each feature gets a short path to spine ─
+    def _add_feature_spurs(self, fig):
+        """
+        For every placed feature, draw a short path from the nearest spine
+        point to the feature entrance. Spurs are THIN (6ft) and drawn ON TOP
+        of the zone surface, never through another feature.
+        """
+        features=self._layout.get('features',{})
+        hx,hy,hw,hd=self._house_bbox()
+        door_cx=hx+hw/2
+        cross_y=hy+hd*0.5
+        spur_w=6.0
+        spur_col='#BCAAA4'
+        show_leg=True
 
-            # Walls
-            fig.add_trace(_box(x0,y0,base,x1,y1,roof_b,
-                               color=wall_col, name=label,
-                               opacity=0.92, show_legend=True,
-                               legendgroup=label))
-            # Hip roof
-            fig.add_trace(_hip_roof(x0,y0,x1,y1,
-                                    base_z=roof_b, apex_z=roof_t,
-                                    color=roof_col, name=label+' Roof',
-                                    legendgroup=label))
+        def _spur(fx,fy):
+            nonlocal show_leg
+            tz=self._tz(fx,fy)
+            # Nearest spine point: either cross_y or door_cx column
+            # Snap to closest of the two main axes
+            if abs(fx-door_cx)<abs(fy-cross_y):
+                # Closer to N-S spine: go horizontal to door_cx, then along spine
+                spine_x,spine_y=door_cx,fy
+            else:
+                # Closer to E-W spine: go vertical to cross_y, then along spine
+                spine_x,spine_y=fx,cross_y
 
-            # Small features per type
-            if key=='chicken_coop':
-                # Ramp
-                ramp_x = (x0+x1)/2-2; ramp_y = y0
-                for t in _path_box(ramp_x,y0-8, ramp_x,y0, 4, base,
-                                   color='#D7CCC8', name='Coop Ramp',
-                                   show_legend=False, legendgroup=label):
-                    fig.add_trace(t)
-            elif key=='fish_tanks':
-                # Water surface inside tanks
-                mid_z = base+0.5
-                fig.add_trace(_box(x0+2,y0+2,mid_z,
-                                   x1-2,y1-2,mid_z+0.3,
-                                   color='#4FC3F7', name='Fish Water',
-                                   opacity=0.70, show_legend=False,
-                                   legendgroup=label))
-            elif key=='bee_hives':
-                # Individual hive boxes
-                n_hives = max(1,int(f['width']/15))
-                hw_each = (f['width']-5)/n_hives-2
-                for hi in range(n_hives):
-                    hx_each = x0+3+hi*(hw_each+2)
-                    fig.add_trace(_box(
-                        hx_each,y0+2,base,
-                        hx_each+hw_each,y1-2,base+3.5,
-                        color='#FFF176', name=f'Hive {hi+1}',
-                        opacity=0.95, show_legend=False,
-                        legendgroup=label,
-                    ))
+            # Draw H segment
+            xs=np.linspace(min(fx,spine_x),max(fx,spine_x),max(3,int(abs(fx-spine_x)/5)))
+            if len(xs)>1:
+                ys=np.linspace(fy-spur_w/2,fy+spur_w/2,3)
+                Xg,Yg=np.meshgrid(xs,ys)
+                Zg=np.full_like(Xg,tz+0.08)
+                fig.add_trace(go.Surface(x=Xg,y=Yg,z=Zg,
+                                          colorscale=[[0,spur_col],[1,spur_col]],
+                                          showscale=False,opacity=0.85,
+                                          name='Feature Path',showlegend=show_leg,
+                                          legendgroup='Roads'))
+                show_leg=False
+            # Draw V segment
+            ys2=np.linspace(min(fy,spine_y),max(fy,spine_y),max(3,int(abs(fy-spine_y)/5)))
+            if len(ys2)>1:
+                xs2=np.linspace(spine_x-spur_w/2,spine_x+spur_w/2,3)
+                Xg2,Yg2=np.meshgrid(xs2,ys2)
+                Zg2=np.full_like(Xg2,tz+0.08)
+                fig.add_trace(go.Surface(x=Xg2,y=Yg2,z=Zg2,
+                                          colorscale=[[0,spur_col],[1,spur_col]],
+                                          showscale=False,opacity=0.85,
+                                          name='Feature Path',showlegend=False,
+                                          legendgroup='Roads'))
 
-    # ── Trees with species-specific heights ────────────────────────────────────
-    def _add_trees(self, fig):
-        zones = self._layout.get('zone_positions',{})
-        if 'z2' not in zones: return
-        z2 = zones['z2']
-
-        rel_positions = [
-            (0.18,0.32,'Mango'),    (0.50,0.60,'Coconut'),
-            (0.82,0.42,'Jackfruit'),(0.32,0.75,'Banana'),
-            (0.68,0.22,'Guava'),    (0.15,0.55,'Papaya'),
-            (0.60,0.85,'Citrus'),   (0.88,0.70,'Avocado'),
-        ]
-
-        first_tree = True
-        for rx,ry,species in rel_positions:
-            tx = z2['x']+rx*z2['width']
-            ty = z2['y']+ry*z2['height']
-            # Clamp inside zone
-            tx = max(z2['x']+15, min(tx, z2['x']+z2['width']-15))
-            ty = max(z2['y']+15, min(ty, z2['y']+z2['height']-15))
-            base = self._terrain_z(tx,ty)+1.5
-
-            sp = TREE_SPECS.get(species, TREE_SPECS['Mango'])
-            if not self._reg.circle_clear(tx,ty,sp['canopy_r']+2):
+        for key in features:
+            f=features[key]
+            if 'radius' in f:
+                fx,fy=f['x'],f['y']
+            else:
+                fx=f['x']+f.get('width',20)/2
+                fy=f['y']+f.get('height',20)/2
+            # Only draw spur if feature is registered (was placed successfully)
+            if not self._reg.point_in_any(fx,fy):
                 continue
-            self._reg.force_register_circle(tx,ty,sp['canopy_r'])
+            _spur(fx,fy)
+
+    # ── STEP 3: Trees — checked against ALL registered elements ──────────────
+    def _add_trees(self, fig):
+        zones=self._layout.get('zone_positions',{})
+        features=self._layout.get('features',{})
+        extra_trees=self._layout.get('extra_trees',[])  # custom user trees
+
+        # Gather all zone positions for tree placement
+        z2_zones=[]
+        if 'z2' in zones:
+            z2_zones.append(zones['z2'])
+
+        # Also scatter some in z3 edges (not in crops, but borders)
+        border_zones=[]
+        if 'z4' in zones:
+            border_zones.append(zones['z4'])
+
+        # Build placement list from z2
+        species_cycle = _SPECIES_CYCLE.copy()
+        placements=[]
+        for z in z2_zones:
+            np.random.seed(42)
+            rx_list=np.random.uniform(0.05,0.95,20)
+            ry_list=np.random.uniform(0.05,0.95,20)
+            for idx,(rx,ry) in enumerate(zip(rx_list,ry_list)):
+                tx=z['x']+rx*z['width']
+                ty=z['y']+ry*z['height']
+                sp=species_cycle[idx%len(species_cycle)]
+                placements.append((tx,ty,sp))
+
+        # Buffer zone (z4): Neem, Teak, Bamboo border trees
+        for z in border_zones:
+            np.random.seed(77)
+            for idx in range(12):
+                rx=np.random.uniform(0.02,0.98)
+                ry=np.random.uniform(0.05,0.95)
+                tx=z['x']+rx*z['width']
+                ty=z['y']+ry*z['height']
+                sp=['Neem','Teak','Bamboo'][idx%3]
+                placements.append((tx,ty,sp))
+
+        # Custom user trees
+        for item in extra_trees:
+            placements.append((item['x'],item['y'],item.get('species','Mango')))
+
+        first_tree=True
+        for tx,ty,species in placements:
+            sp=TREE_SPECIES.get(species,TREE_SPECIES['Mango'])
+            cr=sp['canopy_r']
+            tr=sp['trunk_r']
+
+            # Clamp inside property
+            tx=max(cr+2, min(tx, self._L-cr-2))
+            ty=max(cr+2, min(ty, self._W-cr-2))
+
+            # Strict collision check — skip if overlaps road/feature
+            if not self._reg.circle_clear(tx,ty,cr):
+                continue
+            self._reg.register_circle(tx,ty,cr)
+
+            base=self._tz(tx,ty)+1.3
 
             # Trunk
-            fig.add_trace(_cylinder_surface(
-                tx,ty, sp['trunk_r'],
-                base, base+sp['trunk_h'],
-                color='#6D4C41', name=species,
-                show_legend=first_tree, legendgroup='Trees',
-            ))
-            # Canopy (cone)
-            fig.add_trace(_cone_mesh(
-                tx,ty, sp['canopy_r'],
-                base+sp['canopy_bot'], base+sp['canopy_top'],
-                color=sp['color'], name=species,
-                show_legend=False, legendgroup='Trees',
-            ))
-            # Secondary canopy layer (rounder look)
-            fig.add_trace(_cone_mesh(
-                tx,ty, sp['canopy_r']*0.75,
-                base+sp['canopy_bot']+sp['canopy_r']*0.3,
-                base+sp['canopy_top']+sp['canopy_r']*0.1,
-                color=sp['color'], name=species,
-                show_legend=False, legendgroup='Trees',
-            ))
-            first_tree = False
+            fig.add_trace(_cylinder(tx,ty,tr,base,base+sp['trunk_h'],
+                                    '#6D4C41',species,show_legend=first_tree,
+                                    legendgroup='Trees'))
+            # Primary canopy
+            fig.add_trace(_cone(tx,ty,cr,base+sp['canopy_bot'],
+                                base+sp['canopy_top'],sp['color'],species,
+                                show_legend=False,legendgroup='Trees'))
+            # Secondary canopy (rounder look)
+            fig.add_trace(_cone(tx,ty,cr*0.70,
+                                base+sp['canopy_bot']+cr*0.35,
+                                base+sp['canopy_top']+cr*0.12,
+                                sp['color2'],species,
+                                show_legend=False,legendgroup='Trees'))
+            first_tree=False
 
-    # ── Figure layout ──────────────────────────────────────────────────────────
+    # ── Layout ────────────────────────────────────────────────────────────────
     def _configure_layout(self, fig):
-        L,W = self._L,self._W
-        acres = self._layout.get('acres', round(L*W/43560,2))
+        L,W=self._L,self._W
+        acres=self._layout.get('acres',round(L*W/43560,2))
         fig.update_layout(
             title=dict(
-                text=f"🏡 3D Homestead — {acres:.2f} acres ({int(L)} × {int(W)} ft)"
-                     f"<br><sup>Click legend items to show/hide</sup>",
-                font=dict(size=16,color='#2E7D32',family='Arial'),
-                x=0.5,
+                text=(f"🏡 3D Homestead — {acres:.2f} acres ({int(L)} × {int(W)} ft)"
+                      "<br><sup>Click legend to toggle layers · Drag to rotate</sup>"),
+                font=dict(size=15,color='#2E7D32',family='Arial'),x=0.5,
             ),
             scene=dict(
-                xaxis_title='Length (ft)',
-                yaxis_title='Width (ft)',
-                zaxis_title='Height (ft)',
-                aspectmode='data',
+                xaxis_title='Length (ft)',yaxis_title='Width (ft)',
+                zaxis_title='Height (ft)',aspectmode='data',
                 bgcolor='#C9E8F5',
                 camera=dict(eye=dict(x=1.3,y=-1.5,z=0.85),
                             up=dict(x=0,y=0,z=1)),
@@ -849,43 +778,38 @@ class Visualizer3D:
                            range=[-2,35]),
             ),
             legend=dict(
-                x=0.01, y=0.99,
+                x=0.01,y=0.99,
                 bgcolor='rgba(255,255,255,0.90)',
-                bordercolor='#90A4AE', borderwidth=1.5,
-                font=dict(size=11),
-                itemclick='toggle',         # single click = toggle
-                itemdoubleclick='toggleothers',  # double click = isolate
-                title=dict(text='<b>Layers</b><br><sup>Click to toggle</sup>',
-                           font=dict(size=10)),
+                bordercolor='#90A4AE',borderwidth=1.5,
+                font=dict(size=10),
+                itemclick='toggle',
+                itemdoubleclick='toggleothers',
+                title=dict(text='<b>Layers</b> (click=toggle)',
+                           font=dict(size=9)),
             ),
             paper_bgcolor='#EAF4FB',
             margin=dict(l=0,r=0,t=70,b=0),
-            width=1000, height=700,
-            updatemenus=[
-                dict(
-                    type='buttons',
-                    direction='left',
-                    x=0.5, y=0.02,
-                    xanchor='center',
-                    buttons=[
-                        dict(label='Top View',
-                             method='relayout',
-                             args=[{'scene.camera.eye':{'x':0,'y':0,'z':2.5},
-                                    'scene.camera.up':{'x':0,'y':1,'z':0}}]),
-                        dict(label='3D View',
-                             method='relayout',
-                             args=[{'scene.camera.eye':{'x':1.3,'y':-1.5,'z':0.85},
-                                    'scene.camera.up':{'x':0,'y':0,'z':1}}]),
-                        dict(label='South View',
-                             method='relayout',
-                             args=[{'scene.camera.eye':{'x':0,'y':-2.2,'z':0.5},
-                                    'scene.camera.up':{'x':0,'y':0,'z':1}}]),
-                    ],
-                    bgcolor='white', bordercolor='#78909C',
-                    font=dict(size=11),
-                )
-            ],
+            width=1000,height=720,
+            updatemenus=[dict(
+                type='buttons',direction='left',
+                x=0.5,y=0.01,xanchor='center',
+                buttons=[
+                    dict(label='Top View',method='relayout',
+                         args=[{'scene.camera.eye':{'x':0,'y':0,'z':2.5},
+                                'scene.camera.up':{'x':0,'y':1,'z':0}}]),
+                    dict(label='3D View',method='relayout',
+                         args=[{'scene.camera.eye':{'x':1.3,'y':-1.5,'z':0.85},
+                                'scene.camera.up':{'x':0,'y':0,'z':1}}]),
+                    dict(label='South View',method='relayout',
+                         args=[{'scene.camera.eye':{'x':0,'y':-2.5,'z':0.5},
+                                'scene.camera.up':{'x':0,'y':0,'z':1}}]),
+                    dict(label='Bird View',method='relayout',
+                         args=[{'scene.camera.eye':{'x':0.1,'y':-0.1,'z':3.0},
+                                'scene.camera.up':{'x':0,'y':1,'z':0}}]),
+                ],
+                bgcolor='white',bordercolor='#78909C',font=dict(size=11),
+            )],
         )
 
     def export_as_html(self, fig: go.Figure, filename: str='homestead_3d.html'):
-        pio.write_html(fig, file=filename, auto_open=False, include_plotlyjs='cdn')
+        pio.write_html(fig,file=filename,auto_open=False,include_plotlyjs='cdn')
