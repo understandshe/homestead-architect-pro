@@ -548,7 +548,3 @@ class Visualizer2D:
             ax.add_patch(Rectangle((lx+5, y_pos-3), 10, 8, facecolor=color,
                                   edgecolor='#546E7A', linewidth=0.8))
             ax.text(lx+20, y_pos, label, fontsize=7, va='center')
-'''
-
-print("✅ File 4: visualizer_2d_v7.py created")
-print(f"   Length: {len(files_content['visualizer_2d_v7.py'])} characters")
