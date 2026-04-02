@@ -1,16 +1,16 @@
 """
-3D Visualization Engine — Premium v6 FINAL
-Homestead Architect Pro 2026 — Global Edition
+3D Visualization Engine â€” Premium v6 FINAL
+Homestead Architect Pro 2026 â€” Global Edition
 
 Core fixes vs v5:
-  1. Traces: 528 → ~80  (paths merged into single Surface grids,
+  1. Traces: 528 â†’ ~80  (paths merged into single Surface grids,
                           plants merged into single Scatter3d,
                           trees batched by species group)
-  2. Kitchen Garden never touches house — hard clamp to z1 bounds,
+  2. Kitchen Garden never touches house â€” hard clamp to z1 bounds,
      house bbox excluded from bed placement
-  3. Spur paths route via safe waypoints — never enter a registered
+  3. Spur paths route via safe waypoints â€” never enter a registered
      pond/shed; each spur walks outward to the nearest clear spine point
-  4. Trees fully inside z2 bounds — radius clamp + z2 bounding wall check
+  4. Trees fully inside z2 bounds â€” radius clamp + z2 bounding wall check
   5. Perimeter roads stay inside boundary and are registered first
 """
 
@@ -20,9 +20,9 @@ import numpy as np
 from typing import Dict, Any, List, Tuple, Optional
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 #  Collision Registry
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _Reg:
     GAP = 6.0   # minimum clear gap between any two objects (ft)
 
@@ -68,9 +68,9 @@ class _Reg:
         return True
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 #  12 Tree species
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 TREE_SPECIES = {
     'Mango':     dict(th=5, cb=5, ct=20, cr=8,  tr=1.0, c1='#2E7D32',c2='#388E3C',
                       income=(300,1500), unit='kg/yr', yld='80-200'),
@@ -100,9 +100,9 @@ TREE_SPECIES = {
 _SP_CYCLE = list(TREE_SPECIES.keys())
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Low-level geometry (kept minimal — NO redundant traces)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+#  Low-level geometry (kept minimal â€” NO redundant traces)
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def _box(x0,y0,z0,x1,y1,z1,col,name,op=0.90,sl=True,lg=None):
     vx=[x0,x1,x1,x0,x0,x1,x1,x0]; vy=[y0,y0,y1,y1,y0,y0,y1,y1]
     vz=[z0]*4+[z1]*4
@@ -122,7 +122,7 @@ def _roof(x0,y0,x1,y1,zb,zt,col,lg=None):
                      showlegend=False,legendgroup=lg or 'Roof',flatshading=True)
 
 def _grid_surf(xs,ys,z_val,col,name,op=0.88,sl=True,lg=None):
-    """Flat surface from 1-D x/y arrays — one trace for the whole road/zone."""
+    """Flat surface from 1-D x/y arrays â€” one trace for the whole road/zone."""
     Xg,Yg = np.meshgrid(xs,ys)
     Zg    = np.full_like(Xg, z_val, dtype=float)
     return go.Surface(x=Xg,y=Yg,z=Zg,
@@ -147,12 +147,12 @@ def _cone_mesh(cx,cy,r,z0,z1,col,name,n=14,sl=False,lg=None):
                      showlegend=sl,legendgroup=lg or name,flatshading=True)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 #  Road slab helper  (ONE Surface per road segment, not per tile)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def _road_surf(x0,y0,x1,y1,w,tz, col='#D7CCC8',name='Road',sl=True,lg='Roads'):
     """
-    Axis-aligned road: if dx>dy → horizontal, else → vertical.
+    Axis-aligned road: if dx>dy â†’ horizontal, else â†’ vertical.
     Returns a single Surface trace (not a list).
     """
     if x0==x1:   # vertical road
@@ -169,9 +169,9 @@ def _road_surf(x0,y0,x1,y1,w,tz, col='#D7CCC8',name='Road',sl=True,lg='Roads'):
                       name=name,showlegend=sl,legendgroup=lg)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 #  Batch plant scatter (ONE Scatter3d for ALL plants in kitchen garden)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def _plant_scatter(positions, colors_list, base_z):
     """
     positions: list of (x,y) tuples
@@ -190,15 +190,15 @@ def _plant_scatter(positions, colors_list, base_z):
                         legendgroup='Kitchen Garden')
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 #  Main class
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class Visualizer3D:
 
     ZONE_NAMES = {
-        'z0':'Zone 0 – Residential','z1':'Zone 1 – Kitchen Garden',
-        'z2':'Zone 2 – Food Forest','z3':'Zone 3 – Pasture / Crops',
-        'z4':'Zone 4 – Buffer Zone',
+        'z0':'Zone 0 â€“ Residential','z1':'Zone 1 â€“ Kitchen Garden',
+        'z2':'Zone 2 â€“ Food Forest','z3':'Zone 3 â€“ Pasture / Crops',
+        'z4':'Zone 4 â€“ Buffer Zone',
     }
 
     def create(self, layout: Dict[str,Any]) -> go.Figure:
@@ -209,24 +209,24 @@ class Visualizer3D:
         self._ly    = layout
         self._fig   = go.Figure()
 
-        # ── STRICT ORDER ──────────────────────────────────────────────────
+        # â”€â”€ STRICT ORDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._terrain()
         self._zones()
-        self._spine_roads()        # ① roads registered FIRST
-        self._house()              # ② house
-        self._kitchen_garden()     # ③ z1 beds (clamped away from house)
+        self._spine_roads()        # â‘  roads registered FIRST
+        self._house()              # â‘¡ house
+        self._kitchen_garden()     # â‘¢ z1 beds (clamped away from house)
         self._water()
         self._solar()
         self._greenhouse()
         self._rain_tank()
         self._livestock()
-        self._feature_spurs()      # ④ spur per feature, routed around obstacles
-        self._trees()              # ⑤ trees last
+        self._feature_spurs()      # â‘£ spur per feature, routed around obstacles
+        self._trees()              # â‘¤ trees last
 
         self._layout_cfg()
         return self._fig
 
-    # ── helpers ──────────────────────────────────────────────────────────────
+    # â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _tz(self,x,y):
         s,L,W=self._slope,self._L,self._W
         if s=='South': return y*0.025
@@ -245,7 +245,7 @@ class Visualizer3D:
 
     def _add(self,trace): self._fig.add_trace(trace)
 
-    # ── Terrain (1 trace) ─────────────────────────────────────────────────────
+    # â”€â”€ Terrain (1 trace) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _terrain(self):
         L,W=self._L,self._W
         x=np.linspace(0,L,35); y=np.linspace(0,W,35)
@@ -259,7 +259,7 @@ class Visualizer3D:
                                   start=Z.min(),end=Z.max(),
                                   size=max(0.01,(Z.max()-Z.min()+0.01)/5)))))
 
-    # ── Zones (1 trace each = 5 traces) ──────────────────────────────────────
+    # â”€â”€ Zones (1 trace each = 5 traces) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _zones(self):
         cs={'z0':[[0,'#FFF9C4'],[1,'#FFFDE7']],
             'z1':[[0,'#A5D6A7'],[1,'#C8E6C9']],
@@ -280,7 +280,7 @@ class Visualizer3D:
                 name=self.ZONE_NAMES.get(zid,zid),
                 showlegend=True,legendgroup=zid))
 
-    # ── ① Spine roads — registered FIRST ─────────────────────────────────────
+    # â”€â”€ â‘  Spine roads â€” registered FIRST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _spine_roads(self):
         L,W=self._L,self._W
         hx,hy,hw,hd=self._house_bbox()
@@ -307,14 +307,14 @@ class Visualizer3D:
         road(po,po, po,W-po,    pw,'Perimeter Road','#BCAAA4')
         road(L-po,po,L-po,W-po, pw,'Perimeter Road','#BCAAA4')
 
-        # Main N-S spine: south boundary → house bottom
+        # Main N-S spine: south boundary â†’ house bottom
         road(dcx,po, dcx,hy, mw,'Main Road')
         # Main E-W cross road at house mid-height
         road(po,cy, L-po,cy, mw,'Main Road')
-        # N-S spine: house top → north perimeter
+        # N-S spine: house top â†’ north perimeter
         road(dcx,hy+hd, dcx,W-po, mw,'Main Road')
 
-    # ── ② House ───────────────────────────────────────────────────────────────
+    # â”€â”€ â‘¡ House â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _house_bbox(self):
         L,W=self._L,self._W
         pos=self._ly.get('house_position','Center')
@@ -334,7 +334,7 @@ class Visualizer3D:
         lg='House'
         # Foundation
         self._add(_box(hx-.4,hy-.4,base-.4,hx+hw+.4,hy+hd+.4,base,'#BCAAA4','Foundation',sl=False,lg=lg))
-        # Walls — each face is a thin box
+        # Walls â€” each face is a thin box
         for wx0,wy0,wx1,wy1,c,first in [
             (hx,   hy,        hx+hw, hy+wt,      '#D7CCC8',True),
             (hx,   hy+hd-wt,  hx+hw, hy+hd,      '#BCAAA4',False),
@@ -363,7 +363,7 @@ class Visualizer3D:
         for cx3 in [px+pw*.1,px+pw*.9]:
             self._add(_cyl(cx3,py+pd*.5,.45,base,pz,'#8D6E63','Porch Column',sl=False,lg=lg))
 
-    # ── ③ Kitchen Garden — NEVER overlaps house or roads ─────────────────────
+    # â”€â”€ â‘¢ Kitchen Garden â€” NEVER overlaps house or roads â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _kitchen_garden(self):
         zones=self._ly.get('zone_positions',{})
         if 'z1' not in zones: return
@@ -384,7 +384,7 @@ class Visualizer3D:
         h_margin=8
         if not (hx+hw+h_margin < safe_x0 or hx-h_margin > safe_x1 or
                 hy+hd+h_margin < safe_y0 or hy-h_margin > safe_y1):
-            # z1 overlaps house area — keep beds to the non-overlapping strip
+            # z1 overlaps house area â€” keep beds to the non-overlapping strip
             # Prefer top strip (y close to y0+h)
             if hy > safe_y0:
                 safe_y1 = min(safe_y1, hy - h_margin)
@@ -442,7 +442,7 @@ class Visualizer3D:
                             line=dict(color='#1B5E20',width=0.5)),
                 name='Vegetable Plants',showlegend=True,legendgroup='Kitchen Garden'))
 
-    # ── Water ─────────────────────────────────────────────────────────────────
+    # â”€â”€ Water â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _water(self):
         f=self._ly.get('features',{})
         if 'pond' in f:
@@ -475,7 +475,7 @@ class Visualizer3D:
                     self._add(_cyl(p['x'],p['y'],r*.8,base,base+3.5,'#4FC3F7','Borewell Water',sl=False,lg='Borewell'))
                 break
 
-    # ── Solar ─────────────────────────────────────────────────────────────────
+    # â”€â”€ Solar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _solar(self):
         f=self._ly.get('features',{}).get('solar')
         if not f: return
@@ -493,7 +493,7 @@ class Visualizer3D:
                 self._add(_box(px,py,base+.22,px+cw,py+ch,base+.50,'#1565C0','Solar Panels',sl=sl,lg='Solar'))
                 sl=False
 
-    # ── Greenhouse ────────────────────────────────────────────────────────────
+    # â”€â”€ Greenhouse â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _greenhouse(self):
         f=self._ly.get('features',{}).get('greenhouse')
         if not f: return
@@ -507,7 +507,7 @@ class Visualizer3D:
         for sy in [y0+4,y1-10]:
             self._add(_box(x0+3,sy,base+.4,x1-3,sy+7,base+1.1,'#5D4037','GH Bed',sl=False,lg='Greenhouse'))
 
-    # ── Rain tank ─────────────────────────────────────────────────────────────
+    # â”€â”€ Rain tank â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _rain_tank(self):
         f=self._ly.get('features',{}).get('rain_tank')
         if not f: return
@@ -517,7 +517,7 @@ class Visualizer3D:
         self._reg.add_rect(x0,y0,x1,y1)
         self._add(_box(x0,y0,base,x1,y1,base+6,'#4FC3F7','Rain Tank',op=0.80,sl=True,lg='Rain Tank'))
 
-    # ── Livestock ─────────────────────────────────────────────────────────────
+    # â”€â”€ Livestock â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _livestock(self):
         f=self._ly.get('features',{})
         cfg={'goat_shed':   ('#FFCCBC','#4E342E','Goat Shed',   7.0),
@@ -543,7 +543,7 @@ class Visualizer3D:
                     hxe=x0+2+hi*(hwe+1.5)
                     self._add(_box(hxe,y0+2,base,hxe+hwe,y1-2,base+3.2,'#FFF176',f'Hive{hi+1}',sl=False,lg=label))
 
-    # ── ④ Feature spurs — routed AROUND obstacles ──────────────────────────────
+    # â”€â”€ â‘£ Feature spurs â€” routed AROUND obstacles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _feature_spurs(self):
         """
         For each registered feature, draw a 6-ft wide L-shaped path from
@@ -580,13 +580,13 @@ class Visualizer3D:
             tz=self._tz(fx,fy)
             # Decide spine axis
             if abs(fx-dcx) < abs(fy-cy):
-                # Closer to N-S spine → bend point at (dcx, fy)
+                # Closer to N-S spine â†’ bend point at (dcx, fy)
                 wx=safe_x_waypoint(fx,fy,dcx); wy=fy
             else:
-                # Closer to E-W spine → bend point at (fx, cy)
+                # Closer to E-W spine â†’ bend point at (fx, cy)
                 wx=fx; wy=safe_y_waypoint(fx,fy,cy)
 
-            # H segment: (fx,fy) → (wx,wy)
+            # H segment: (fx,fy) â†’ (wx,wy)
             if abs(fx-wx)>2:
                 xl=np.linspace(min(fx,wx),max(fx,wx),max(3,int(abs(fx-wx)/10)+1))
                 yl=np.linspace(fy-sw/2,fy+sw/2,3)
@@ -596,7 +596,7 @@ class Visualizer3D:
                     colorscale=[[0,sc],[1,sc]],showscale=False,opacity=0.82,
                     name='Feature Path',showlegend=not shown,legendgroup='Roads'))
                 shown=True
-            # V segment: (wx,wy) → (wx,cy) or (dcx,fy)
+            # V segment: (wx,wy) â†’ (wx,cy) or (dcx,fy)
             spine_end_y = cy if abs(fy-cy)<abs(fx-dcx) else wy
             if abs(wy-spine_end_y)>2:
                 xl2=np.linspace(wx-sw/2,wx+sw/2,3)
@@ -621,7 +621,7 @@ class Visualizer3D:
             if self._reg.point_free(fx,fy): continue  # not placed
             _spur(fx,fy)
 
-    # ── ⑤ Trees — last, strict collision ──────────────────────────────────────
+    # â”€â”€ â‘¤ Trees â€” last, strict collision â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _trees(self):
         zones=self._ly.get('zone_positions',{})
         placements=self._ly.get('tree_placements',[])
@@ -682,7 +682,7 @@ class Visualizer3D:
             self._add(_cone_mesh(tx,ty,cr*.68,base+sp['cb']+cr*.32,base+sp['ct']+cr*.10,sp['c2'],sp_name,sl=False,lg='Trees'))
             first=False
 
-    # ── Layout config ──────────────────────────────────────────────────────────
+    # â”€â”€ Layout config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _layout_cfg(self):
         L,W=self._L,self._W
         acres=self._ly.get('acres',round(L*W/43560,2))
@@ -690,8 +690,8 @@ class Visualizer3D:
         n=len(self._fig.data)
         self._fig.update_layout(
             title=dict(
-                text=(f"🏡 3D Homestead — {acres:.2f} acres ({int(L)}×{int(W)} ft)"
-                      f"<br><sup>{tc} trees · {n} elements · Click legend to toggle</sup>"),
+                text=(f"ðŸ¡ 3D Homestead â€” {acres:.2f} acres ({int(L)}Ã—{int(W)} ft)"
+                      f"<br><sup>{tc} trees Â· {n} elements Â· Click legend to toggle</sup>"),
                 font=dict(size=14,color='#2E7D32',family='Arial'),x=0.5),
             scene=dict(
                 xaxis_title='Length (ft)',yaxis_title='Width (ft)',
@@ -724,8 +724,8 @@ class Visualizer3D:
                      x=0.99,y=0.99,xanchor='right',yanchor='top',
                      showactive=True,active=0,
                      buttons=[
-                         dict(label='☰ Layers',method='relayout',args=[{'showlegend':True}]),
-                         dict(label='✕ Hide',  method='relayout',args=[{'showlegend':False}]),
+                         dict(label='â˜° Layers',method='relayout',args=[{'showlegend':True}]),
+                         dict(label='âœ• Hide',  method='relayout',args=[{'showlegend':False}]),
                      ],
                      bgcolor='rgba(255,255,255,0.92)',bordercolor='#90A4AE',
                      font=dict(size=11,color='#2E7D32')),
