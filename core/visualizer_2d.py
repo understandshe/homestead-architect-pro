@@ -1,169 +1,211 @@
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle, Circle
+from matplotlib.patches import Rectangle, Circle, FancyArrow
+from matplotlib.lines import Line2D
 from io import BytesIO
 import numpy as np
 
 
 class Visualizer2D:
 
+    # -----------------------------
+    # ENTRY
+    # -----------------------------
     def create(self, layout: dict, answers: dict) -> BytesIO:
 
-        L = layout['dimensions']['L']
-        W = layout['dimensions']['W']
+        L = layout["dimensions"]["L"]
+        W = layout["dimensions"]["W"]
 
         fig, ax = plt.subplots(figsize=(24, 18), dpi=200)
-        ax.set_facecolor('#6FAF73')
+        ax.set_facecolor("#e9efe9")
 
-        # --------------------------
-        # ZONES
-        # --------------------------
+        # -----------------------------
+        # ZONES (clean + readable)
+        # -----------------------------
         zone_colors = {
-            'z0': '#F0EAD6',
-            'z1': '#C5E1A5',
-            'z2': '#388E3C',
-            'z3': '#FFF9C4',
-            'z4': '#A5D6A7',
+            "z0": "#dfe7ec",  # residential
+            "z1": "#cfe8b4",  # kitchen
+            "z2": "#8fbc8f",  # forest
+            "z3": "#e6d3a3",  # pasture
+            "z4": "#c6e2d9",  # buffer
         }
 
-        for zid, pos in layout.get('zone_positions', {}).items():
+        for zid, pos in layout.get("zone_positions", {}).items():
             ax.add_patch(Rectangle(
-                (pos['x'], pos['y']),
-                pos['width'],
-                pos['height'],
-                facecolor=zone_colors.get(zid, '#ccc'),
-                edgecolor='#444',
-                linewidth=1.5,
-                alpha=0.4
+                (pos["x"], pos["y"]),
+                pos["width"],
+                pos["height"],
+                facecolor=zone_colors.get(zid, "#ccc"),
+                edgecolor="#4f5b4f",
+                linewidth=2,
+                zorder=1
             ))
 
-        # --------------------------
+            # label
+            ax.text(
+                pos["x"] + pos["width"]/2,
+                pos["y"] + pos["height"]/2,
+                f"{zid.upper()}",
+                ha="center",
+                va="center",
+                fontsize=14,
+                weight="bold",
+                color="#2f3e2f"
+            )
+
+        # -----------------------------
         # HOUSE
-        # --------------------------
+        # -----------------------------
         hx, hy, hw, hh = self._house_bbox(layout, L, W)
 
         ax.add_patch(Rectangle(
             (hx, hy), hw, hh,
-            facecolor='#ECEFF1',
-            edgecolor='#444',
+            facecolor="#d6dbe0",
+            edgecolor="#333",
             linewidth=3,
             zorder=5
         ))
 
-        # --------------------------
-        # CLEAN PATH SYSTEM
-        # --------------------------
-        center_x = hx + hw / 2
-        cross_y = hy + hh * 0.5
+        # -----------------------------
+        # STRUCTURES (REAL SHAPES)
+        # -----------------------------
+        structures = layout.get("structures", [])
 
-        main_w = max(10, min(L, W) * 0.025)
-        sec_w = main_w * 0.7
+        for s in structures:
+            self._draw_structure(ax, s)
 
-        path_color = '#DCC8A8'
+        # -----------------------------
+        # ROADS (AUTO CONNECTION)
+        # -----------------------------
+        self._draw_roads(ax, structures, hx + hw/2, hy)
 
-        # Entry path
-        ax.plot(
-            [center_x, center_x],
-            [0, hy],
-            color=path_color,
-            linewidth=main_w,
-            solid_capstyle='round',
-            zorder=3
-        )
+        # -----------------------------
+        # TREES (cluster)
+        # -----------------------------
+        self._draw_trees(ax, layout.get("tree_placements", []))
 
-        # Cross path
-        ax.plot(
-            [L * 0.2, L * 0.8],
-            [cross_y, cross_y],
-            color=path_color,
-            linewidth=sec_w,
-            solid_capstyle='round',
-            zorder=3
-        )
+        # -----------------------------
+        # COMPASS
+        # -----------------------------
+        self._draw_compass(ax, L, W)
 
-        # --------------------------
-        # TREES
-        # --------------------------
-        np.random.seed(42)
+        # -----------------------------
+        # SCALE
+        # -----------------------------
+        ax.text(L/2, -W*0.08, f"{int(L)} units", ha="center", fontsize=12)
 
-        for t in layout.get('tree_placements', []):
-            ax.add_patch(Circle(
-                (t['x'], t['y']),
-                6,
-                facecolor='#2E7D32',
-                edgecolor='#1B5E20',
-                alpha=0.9,
-                zorder=4
-            ))
-
-        # --------------------------
-        # KITCHEN BEDS (LIMITED)
-        # --------------------------
-        if 'z1' in layout.get('zone_positions', {}):
-            z = layout['zone_positions']['z1']
-
-            pad = 10
-            bed_w = 15
-            bed_h = 30
-
-            n_beds = min(8, int((z['width'] - 2 * pad) / (bed_w + 5)))
-
-            for i in range(n_beds):
-                bx = z['x'] + pad + i * (bed_w + 5)
-                by = z['y'] + pad
-
-                ax.add_patch(Rectangle(
-                    (bx, by),
-                    bed_w,
-                    bed_h,
-                    facecolor='#5A3E2B',
-                    edgecolor='black',
-                    zorder=5
-                ))
-
-        # --------------------------
-        # LIMITS + MARGIN
-        # --------------------------
-        margin = max(L, W) * 0.25
-
+        # -----------------------------
+        # LIMITS
+        # -----------------------------
+        margin = max(L, W) * 0.2
         ax.set_xlim(-margin, L + margin)
         ax.set_ylim(-margin, W + margin)
+        ax.set_aspect("equal")
+        ax.axis("off")
 
-        ax.set_aspect('equal')
-        ax.axis('off')
-
-        # --------------------------
-        # SAVE HIGH QUALITY
-        # --------------------------
+        # -----------------------------
+        # EXPORT
+        # -----------------------------
         buf = BytesIO()
-
-        plt.savefig(
-            buf,
-            format='png',
-            dpi=300,
-            bbox_inches='tight'
-        )
-
+        plt.savefig(buf, format="png", dpi=300, bbox_inches="tight")
         buf.seek(0)
         plt.close()
 
         return buf
 
-    # --------------------------
+    # -----------------------------
+    # STRUCTURE DRAWER
+    # -----------------------------
+    def _draw_structure(self, ax, s):
+
+        x, y = s["x"], s["y"]
+        t = s["type"]
+
+        if t == "goat_pen":
+            ax.add_patch(Rectangle((x, y), 25, 20,
+                facecolor="#b58b5b", edgecolor="#5a3e2b", linewidth=2, zorder=6))
+            ax.text(x+12, y+10, "Goat", ha="center", fontsize=10)
+
+        elif t == "fish_pond":
+            ax.add_patch(Circle((x, y), 12,
+                facecolor="#5dade2", edgecolor="#1f618d", linewidth=2, zorder=6))
+            ax.text(x, y, "Fish", ha="center", fontsize=10)
+
+        elif t == "greenhouse":
+            ax.add_patch(Rectangle((x, y), 28, 18,
+                facecolor="#d4efdf", edgecolor="#145a32", linewidth=2, zorder=6))
+            ax.text(x+14, y+9, "GH", ha="center", fontsize=10)
+
+        elif t == "solar":
+            ax.add_patch(Rectangle((x, y), 20, 20,
+                facecolor="#f7dc6f", edgecolor="#b7950b", linewidth=2, zorder=6))
+            ax.text(x+10, y+10, "Solar", ha="center", fontsize=9)
+
+        else:
+            ax.add_patch(Rectangle((x, y), 15, 15,
+                facecolor="#ccc", edgecolor="black", zorder=6))
+
+    # -----------------------------
+    # ROAD SYSTEM (SMART)
+    # -----------------------------
+    def _draw_roads(self, ax, structures, hx, hy):
+
+        road_color = "#d2b48c"
+
+        for s in structures:
+            sx, sy = s["x"], s["y"]
+
+            # L-shape connection (clean, realistic)
+            ax.plot([hx, sx], [hy, hy],
+                    color=road_color, linewidth=8, zorder=3, solid_capstyle="round")
+
+            ax.plot([sx, sx], [hy, sy],
+                    color=road_color, linewidth=8, zorder=3, solid_capstyle="round")
+
+    # -----------------------------
+    # TREES
+    # -----------------------------
+    def _draw_trees(self, ax, trees):
+
+        np.random.seed(0)
+
+        for t in trees:
+            r = np.random.uniform(4, 7)
+            ax.add_patch(Circle(
+                (t["x"], t["y"]),
+                r,
+                facecolor="#2e7d32",
+                edgecolor="#1b5e20",
+                zorder=4
+            ))
+
+    # -----------------------------
+    # COMPASS
+    # -----------------------------
+    def _draw_compass(self, ax, L, W):
+
+        cx, cy = L*0.9, W*0.1
+
+        ax.add_patch(Circle((cx, cy), 15, facecolor="white", edgecolor="black"))
+        ax.add_patch(FancyArrow(cx, cy, 0, 10, width=2, color="red"))
+
+        ax.text(cx, cy+18, "N", ha="center", fontsize=12)
+
+    # -----------------------------
     # HOUSE POSITION
-    # --------------------------
+    # -----------------------------
     def _house_bbox(self, layout, L, W):
 
-        pos = layout.get('house_position', 'Center')
+        pos = layout.get("house_position", "Center")
 
         mapping = {
-            'Center': (L * 0.35, W * 0.42, L * 0.30, W * 0.20),
-            'North': (L * 0.30, W * 0.80, L * 0.35, W * 0.15),
-            'South': (L * 0.30, W * 0.05, L * 0.35, W * 0.15),
-            'East': (L * 0.75, W * 0.35, L * 0.20, W * 0.25),
-            'West': (L * 0.05, W * 0.35, L * 0.20, W * 0.25),
+            "Center": (L*0.35, W*0.45, L*0.3, W*0.18),
+            "North": (L*0.3, W*0.8, L*0.35, W*0.15),
+            "South": (L*0.3, W*0.05, L*0.35, W*0.15),
+            "East": (L*0.75, W*0.35, L*0.2, W*0.25),
+            "West": (L*0.05, W*0.35, L*0.2, W*0.25),
         }
 
-        return mapping.get(pos, mapping['Center'])
+        return mapping.get(pos, mapping["Center"])
