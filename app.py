@@ -1,11 +1,11 @@
 """
-Homestead Architect Pro 2026 — v3 FINAL
+Homestead Architect Pro 2026 â€” v3 FINAL
 All features working cleanly.
 """
 
 import streamlit as st
 import sys, io
-import plotly.io as pio  # HTML एक्सपोर्ट के लिए जरूरी
+import plotly.io as pio  # HTML à¤à¤•à¥à¤¸à¤ªà¥‹à¤°à¥à¤Ÿ à¤•à¥‡ à¤²à¤¿à¤ à¤œà¤°à¥‚à¤°à¥€
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
@@ -21,7 +21,7 @@ from core.pdf_generator import PDFGenerator
 
 st.set_page_config(
     page_title='Homestead Architect Pro 2026',
-    page_icon='🏡', layout='wide') # अजीब शब्द को 'Home' आइकन बनाया
+    page_icon='ðŸ¡', layout='wide') # à¤…à¤œà¥€à¤¬ à¤¶à¤¬à¥à¤¦ à¤•à¥‹ 'Home' à¤†à¤‡à¤•à¤¨ à¤¬à¤¨à¤¾à¤¯à¤¾
 
 st.markdown("""
 <style>
@@ -31,17 +31,17 @@ st.markdown("""
 
 
 def main():
-    st.markdown('<p class="main-header">🏡 Homestead Architect Pro</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">ðŸ¡ Homestead Architect Pro</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Design Your Dream Homestead | 2026 Edition</p>', unsafe_allow_html=True)
 
     with st.sidebar:
-        st.title('⚙️ Settings') # अजीब शब्द को 'Settings' आइकन बनाया
-        watermark_enabled = st.checkbox('☑️ Watermark (chundalgardens.com)', value=True)
+        st.title('âš™ï¸ Settings') # à¤…à¤œà¥€à¤¬ à¤¶à¤¬à¥à¤¦ à¤•à¥‹ 'Settings' à¤†à¤‡à¤•à¤¨ à¤¬à¤¨à¤¾à¤¯à¤¾
+        watermark_enabled = st.checkbox('â˜‘ï¸ Watermark (chundalgardens.com)', value=True)
         st.divider()
         st.markdown('Made by: **Chundal Gardens**')
-        st.markdown('🌐 chundalgardens.com')
+        st.markdown('ðŸŒ chundalgardens.com')
 
-    tabs = st.tabs(['🎨 Design', '🌐 3D View', '🐐 Livestock', '💰 Costs', '📥 Download'])
+    tabs = st.tabs(['ðŸŽ¨ Design', 'ðŸŒ 3D View', 'ðŸ Livestock', 'ðŸ’° Costs', 'ðŸ“¥ Download'])
     with tabs[0]: design_tab(watermark_enabled)
     with tabs[1]: view_3d_tab()
     with tabs[2]: livestock_tab()
@@ -50,13 +50,13 @@ def main():
 
 
 def design_tab(watermark_enabled):
-    st.header('🎨 Smart Homestead Designer')
+    st.header('ðŸŽ¨ Smart Homestead Designer')
     interview = UserInterview()
     answers = interview.run()
     if not answers:
         return
 
-    st.success('✅ Generating your homestead design...')
+    st.success('âœ… Generating your homestead design...')
     col1, col2 = st.columns([2, 1])
 
     with col1:
@@ -90,10 +90,10 @@ def design_tab(watermark_enabled):
             st.metric('Category',     ld.get('category', '').title())
             lv = [x for x in ld.get('livestock', []) if x != 'None']
             if lv:
-                st.info('🐾 Animals: ' + ', '.join(lv))
+                st.info('ðŸ¾ Animals: ' + ', '.join(lv))
             if answers.get('location'):
                 climate = ClimateEngine().get_data(answers['location'])
-                st.info(f"🌤 Climate: **{climate['zone']}**")
+                st.info(f"ðŸŒ¤ Climate: **{climate['zone']}**")
 
         if 'layout_data' in st.session_state:
             features = st.session_state['layout_data'].get('features', {})
@@ -106,16 +106,16 @@ def design_tab(watermark_enabled):
                 'compost': 'Compost Bins', 'rain_tank': 'Rain Tank',
                 'swales': 'Swales',
             }
-            with st.expander('📍 Features on map'):
+            with st.expander('ðŸ“ Features on map'):
                 for k, label in label_map.items():
                     if k in features:
-                        st.write(f'✅ {label}')
+                        st.write(f'âœ… {label}')
 
 
 def view_3d_tab():
-    st.header('🌐 Interactive 3D View')
+    st.header('ðŸŒ Interactive 3D View')
     if 'layout_data' not in st.session_state:
-        st.info('👈 Generate a design in the Design tab first.')
+        st.info('ðŸ‘ˆ Generate a design in the Design tab first.')
         return
 
     with st.spinner('Building 3D model...'):
@@ -123,16 +123,16 @@ def view_3d_tab():
         fig = viz3d.create(st.session_state['layout_data'])
         st.plotly_chart(fig, use_container_width=True)
 
-    st.caption('Drag to rotate · Scroll to zoom · Double-click to reset')
+    st.caption('Drag to rotate Â· Scroll to zoom Â· Double-click to reset')
 
-    # --- तेरा HTML डाउनलोड वाला जादुई हिस्सा ---
+    # --- à¤¤à¥‡à¤°à¤¾ HTML à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡ à¤µà¤¾à¤²à¤¾ à¤œà¤¾à¤¦à¥à¤ˆ à¤¹à¤¿à¤¸à¥à¤¸à¤¾ ---
     st.divider()
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        # HTML स्ट्रिंग में बदलो (Plotly JS शामिल करो)
+        # HTML à¤¸à¥à¤Ÿà¥à¤°à¤¿à¤‚à¤— à¤®à¥‡à¤‚ à¤¬à¤¦à¤²à¥‹ (Plotly JS à¤¶à¤¾à¤®à¤¿à¤² à¤•à¤°à¥‹)
         html_bytes = pio.to_html(fig, include_plotlyjs='cdn').encode()
         st.download_button(
-            label="🚀 Download Interactive 3D Map (HTML)",
+            label="ðŸš€ Download Interactive 3D Map (HTML)",
             data=html_bytes,
             file_name="chundalgardens_3d_view.html",
             mime="text/html",
@@ -144,12 +144,12 @@ def view_3d_tab():
     st.divider()
     col1, col2 = st.columns(2)
     with col1:
-        if st.button('📸 Capture 3D for PDF'):
+        if st.button('ðŸ“¸ Capture 3D for PDF'):
             with st.spinner('Capturing 3D screenshot...'):
                 try:
                     img_bytes = pio.to_image(fig, format='png', width=1200, height=750, scale=2)
                     st.session_state['threed_map'] = io.BytesIO(img_bytes)
-                    st.success('✅ 3D captured! Will be included in PDF.')
+                    st.success('âœ… 3D captured! Will be included in PDF.')
                 except Exception as e:
                     st.warning(f'3D capture needs kaleido: pip install kaleido\nError: {e}')
     with col2:
@@ -157,7 +157,7 @@ def view_3d_tab():
             buf = st.session_state['threed_map']
             buf.seek(0)
             st.download_button(
-                '⬇️ Download 3D Image (PNG)',
+                'â¬‡ï¸ Download 3D Image (PNG)',
                 data=buf,
                 file_name='homestead_3d.png',
                 mime='image/png',
@@ -166,7 +166,7 @@ def view_3d_tab():
 
 
 def livestock_tab():
-    st.header('🐐 Livestock Housing Designer')
+    st.header('ðŸ Livestock Housing Designer')
     designer = LivestockDesigner()
 
     col1, col2 = st.columns(2)
@@ -177,7 +177,7 @@ def livestock_tab():
         climate = st.selectbox('Climate', ['Tropical', 'Dry', 'Temperate', 'Cold'])
         budget  = st.selectbox('Budget', ['Basic', 'Standard', 'Premium'])
 
-    if st.button('🏗️ Generate Housing Plan', use_container_width=True):
+    if st.button('ðŸ—ï¸ Generate Housing Plan', use_container_width=True):
         with st.spinner('Designing...'):
             try:
                 design = designer.create_housing(animal, count, climate, budget)
@@ -197,7 +197,7 @@ def livestock_tab():
 
 
 def costs_tab():
-    st.header('💰 Global Cost Calculator')
+    st.header('ðŸ’° Global Cost Calculator')
     calc = CostCalculator()
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -208,7 +208,7 @@ def costs_tab():
         size = st.selectbox('Size', [
             'Small (< 0.5 acre)', 'Medium (0.5-5 acres)', 'Large (5+ acres)'])
 
-    if st.button('💸 Calculate', use_container_width=True):
+    if st.button('ðŸ’¸ Calculate', use_container_width=True):
         with st.spinner('Calculating...'):
             try:
                 costs = calc.estimate(country, currency, size)
@@ -228,27 +228,27 @@ def costs_tab():
 
 
 def download_tab(watermark_enabled):
-    st.header('📥 Download Your Plan')
+    st.header('ðŸ“¥ Download Your Plan')
     if 'current_map' not in st.session_state:
         st.warning('Please generate a design in the Design tab first.')
         return
 
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader('🗺️ Map (PNG)')
+        st.subheader('ðŸ—ºï¸ Map (PNG)')
         buf = st.session_state['current_map']
         buf.seek(0)
         st.download_button(
-            '⬇️ Download Site Map',
+            'â¬‡ï¸ Download Site Map',
             data=buf, file_name='homestead_site_plan.png',
             mime='image/png', use_container_width=True)
 
     with col2:
-        st.subheader('📄 Full PDF Report')
+        st.subheader('ðŸ“„ Full PDF Report')
         include_3d = st.checkbox('Include 3D view in PDF',
                                  value='threed_map' in st.session_state)
 
-        if st.button('📋 Generate PDF', use_container_width=True):
+        if st.button('ðŸ“‹ Generate PDF', use_container_width=True):
             with st.spinner('Creating PDF...'):
                 try:
                     pdf_gen = PDFGenerator()
@@ -263,9 +263,9 @@ def download_tab(watermark_enabled):
                         map_image_buffer=raw,
                         threed_image_buffer=threed,
                     )
-                    st.success('✅ PDF ready!')
+                    st.success('âœ… PDF ready!')
                     st.download_button(
-                        '⬇️ Download PDF Report',
+                        'â¬‡ï¸ Download PDF Report',
                         data=pdf_buf, file_name='homestead_report.pdf',
                         mime='application/pdf', use_container_width=True)
                 except Exception as e:
