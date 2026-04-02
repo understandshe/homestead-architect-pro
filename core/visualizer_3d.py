@@ -707,18 +707,29 @@ class Visualizer3D:
                         title=dict(text='<b>Layers</b> (click=toggle)',font=dict(size=9))),
             paper_bgcolor='#EAF4FB',margin=dict(l=0,r=0,t=70,b=0),
             width=1000,height=720,
-            updatemenus=[dict(
-                type='buttons',direction='left',x=0.5,y=0.01,xanchor='center',
-                buttons=[
-                    dict(label='Top',method='relayout',
-                         args=[{'scene.camera.eye':{'x':0,'y':0,'z':2.5},'scene.camera.up':{'x':0,'y':1,'z':0}}]),
-                    dict(label='3D',method='relayout',
-                         args=[{'scene.camera.eye':{'x':1.3,'y':-1.5,'z':0.85},'scene.camera.up':{'x':0,'y':0,'z':1}}]),
-                    dict(label='South',method='relayout',
-                         args=[{'scene.camera.eye':{'x':0,'y':-2.5,'z':0.5},'scene.camera.up':{'x':0,'y':0,'z':1}}]),
-                    dict(label='Bird',method='relayout',
-                         args=[{'scene.camera.eye':{'x':0.05,'y':-0.05,'z':2.8},'scene.camera.up':{'x':0,'y':1,'z':0}}]),
-                ],bgcolor='white',bordercolor='#78909C',font=dict(size=11))],
+            updatemenus=[
+                dict(type='buttons',direction='left',x=0.5,y=0.01,xanchor='center',
+                     showactive=True,
+                     buttons=[
+                         dict(label='Top',method='relayout',
+                              args=[{'scene.camera.eye':{'x':0,'y':0,'z':2.5},'scene.camera.up':{'x':0,'y':1,'z':0}}]),
+                         dict(label='3D',method='relayout',
+                              args=[{'scene.camera.eye':{'x':1.3,'y':-1.5,'z':0.85},'scene.camera.up':{'x':0,'y':0,'z':1}}]),
+                         dict(label='South',method='relayout',
+                              args=[{'scene.camera.eye':{'x':0,'y':-2.5,'z':0.5},'scene.camera.up':{'x':0,'y':0,'z':1}}]),
+                         dict(label='Bird',method='relayout',
+                              args=[{'scene.camera.eye':{'x':0.05,'y':-0.05,'z':2.8},'scene.camera.up':{'x':0,'y':1,'z':0}}]),
+                     ],bgcolor='white',bordercolor='#78909C',font=dict(size=11)),
+                dict(type='buttons',direction='right',
+                     x=0.99,y=0.99,xanchor='right',yanchor='top',
+                     showactive=True,active=0,
+                     buttons=[
+                         dict(label='☰ Layers',method='relayout',args=[{'showlegend':True}]),
+                         dict(label='✕ Hide',  method='relayout',args=[{'showlegend':False}]),
+                     ],
+                     bgcolor='rgba(255,255,255,0.92)',bordercolor='#90A4AE',
+                     font=dict(size=11,color='#2E7D32')),
+            ],
         )
 
     def export_as_html(self,fig,filename='homestead_3d.html'):
