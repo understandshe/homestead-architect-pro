@@ -1,7 +1,9 @@
 
 # FILE 4: visualizer_2d_v7.py - PREMIUM professional 2D with logical paths
 
-files_content['visualizer_2d_v7.py'] = '''
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+# ... बाकी सारा कोड सीधा यहाँ से शुरू होगा
 """
 Premium 2D Site Plan Visualizer v7
 Professional cartographic quality - logical grid-based paths
