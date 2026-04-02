@@ -293,24 +293,88 @@ class Visualizer2D:
                                    edgecolor='#546E7A', linewidth=1.5,
                                    alpha=0.40, zorder=2))
 
-    # â”€â”€ Perimeter border (dense shrubs like in reference) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â”€â”€ Perimeter fence + gate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _perimeter_border(self, ax, L, W):
-        """Ring of dense green shrubs/trees around property boundary."""
-        border_w = min(L,W)*0.04
-        np.random.seed(7)
-        # Draw dense circular blobs along all 4 edges
-        for edge in range(4):
-            if edge==0:   xs=np.linspace(0,L,int(L/14)); ys=[border_w/2]*len(xs)
-            elif edge==1: xs=np.linspace(0,L,int(L/14)); ys=[W-border_w/2]*len(xs)
-            elif edge==2: ys=np.linspace(border_w,W-border_w,int(W/14)); xs=[border_w/2]*len(ys)
-            else:         ys=np.linspace(border_w,W-border_w,int(W/14)); xs=[L-border_w/2]*len(ys)
-            for bx,by in zip(xs,ys):
-                r = np.random.uniform(border_w*0.55, border_w*0.90)
-                c = ['#1B5E20','#2E7D32','#388E3C','#33691E'][int(bx+by)%4]
-                ax.add_patch(Circle((bx+np.random.uniform(-3,3),
-                                     by+np.random.uniform(-3,3)),
-                                    r, facecolor=c, edgecolor='#1B5E20',
-                                    linewidth=0.5, alpha=0.88, zorder=3))
+        """Professional wooden fence with posts, rails, and main gate."""
+        post_gap  = max(min(L, W) * 0.04, 12.0)  # post every ~4% of plot
+        post_w    = max(post_gap * 0.12, 2.5)
+        post_h    = post_w * 2.2
+        fence_clr = '#8D6E63'   # warm brown
+        post_clr  = '#5D4037'   # dark brown
+        rail_clr  = '#A1887F'   # rail lighter
+        z         = 3
+
+        def _fence_edge(x0, y0, x1, y1):
+            """Draw fence along a straight edge with posts and rails."""
+            dx = x1 - x0; dy = y1 - y0
+            length = np.hypot(dx, dy)
+            if length < 2: return
+            ux, uy = dx/length, dy/length   # unit vector along fence
+            nx, ny = -uy, ux                 # normal (inward)
+
+            n_posts = max(2, int(length / post_gap))
+            for i in range(n_posts + 1):
+                t = i / n_posts
+                px = x0 + t * dx - post_w/2
+                py = y0 + t * dy - post_h/2
+                ax.add_patch(FancyBboxPatch(
+                    (px, py), post_w, post_h,
+                    boxstyle='round,pad=0.5',
+                    facecolor=post_clr, edgecolor='#3E2723',
+                    linewidth=0.8, zorder=z+1))
+            # Two horizontal rails
+            for rail_t in [0.30, 0.70]:
+                rx0 = x0 + nx * post_h * (rail_t - 0.5) * 0.8
+                ry0 = y0 + ny * post_h * (rail_t - 0.5) * 0.8
+                ax.plot([rx0, rx0 + dx], [ry0, ry0 + dy],
+                        color=rail_clr, lw=max(2.5, post_w*0.9),
+                        solid_capstyle='round', zorder=z)
+
+        # Gate position: centre of south boundary (y=0 side)
+        gate_cx = L / 2
+        gate_w  = max(min(L, W) * 0.06, 20.0)  # gate width
+        gate_hw = gate_w / 2
+
+        # South fence (bottom, y=0): two segments with gap for gate
+        _fence_edge(0, 0, gate_cx - gate_hw, 0)
+        _fence_edge(gate_cx + gate_hw, 0, L, 0)
+        # North fence (top, y=W)
+        _fence_edge(0, W, L, W)
+        # West fence
+        _fence_edge(0, 0, 0, W)
+        # East fence
+        _fence_edge(L, 0, L, W)
+
+        # â”€â”€ Main gate (double-leaf wooden gate) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        gp_w = post_w * 1.8; gp_h = post_h * 1.5
+        for gx in [gate_cx - gate_hw - gp_w, gate_cx + gate_hw]:
+            ax.add_patch(FancyBboxPatch(
+                (gx, -gp_h/2), gp_w, gp_h,
+                boxstyle='round,pad=0.5',
+                facecolor='#4E342E', edgecolor='#1A237E',
+                linewidth=2.0, zorder=z+3))
+        # Gate leaves (two swinging panels, drawn open at 45 deg)
+        gl = gate_hw * 0.95; gth = post_h * 0.85
+        for side, angle in [(-1, 40), (1, -40)]:
+            rad = np.radians(angle)
+            cos_a, sin_a = np.cos(rad), np.sin(rad)
+            base_x = gate_cx + side * gate_hw * 0.1
+            pts = [(base_x, 0),
+                   (base_x + side * gl * cos_a, side * gl * sin_a + 0),
+                   (base_x + side * gl * cos_a, side * gl * sin_a + gth),
+                   (base_x, gth)]
+            ax.add_patch(Polygon(pts,
+                                  facecolor='#6D4C41', edgecolor='#3E2723',
+                                  linewidth=1.5, zorder=z+2, alpha=0.92))
+            # Gate diagonal brace
+            ax.plot([pts[0][0], pts[2][0]], [pts[0][1], pts[2][1]],
+                    color='#4E342E', lw=1.2, zorder=z+3, alpha=0.7)
+        # Gate label
+        ax.text(gate_cx, -gp_h - 8, 'MAIN GATE',
+                ha='center', va='top', fontsize=8.5,
+                fontweight='bold', color='#1A237E', zorder=z+4,
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
+                          edgecolor='#1A237E', alpha=0.85, linewidth=1.2))
 
     # â”€â”€ Contour lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _contour_lines(self, ax, layout, L, W):
@@ -391,16 +455,20 @@ class Visualizer2D:
 
     # â”€â”€ House (proper aerial plan view) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _house_bbox(self, layout, L, W):
-        pos = layout.get('house_position','Center')
-        p = {
-            'North':        (L*0.30,W*0.82,L*0.38,W*0.12),
-            'South':        (L*0.30,W*0.06,L*0.38,W*0.12),
-            'East':         (L*0.74,W*0.36,L*0.20,W*0.28),
-            'West':         (L*0.06,W*0.36,L*0.20,W*0.28),
-            'Center':       (L*0.35,W*0.42,L*0.30,W*0.20),
-            'Not built yet':(L*0.35,W*0.42,L*0.30,W*0.20),
-        }
-        return p.get(pos,p['Center'])
+        """Mirror layout_engine._house_bbox exactly so house draws in right place."""
+        pos = layout.get('house_position', 'Center')
+        zone_positions = layout.get('zone_positions', {})
+        z0 = zone_positions.get('z0', {'x': 0, 'y': 0, 'width': L, 'height': W})
+
+        MIN_HW = max(L * 0.08, 40.0)
+        MIN_HH = max(W * 0.03, 30.0)
+        hw = max(z0['width'] * 0.55, MIN_HW)
+        hh = max(z0['height'] * 0.65, MIN_HH)
+        hw = min(hw, z0['width'] * 0.85)
+        hh = min(hh, z0['height'] * 0.90)
+        hx = z0['x'] + (z0['width'] - hw) / 2
+        hy = z0['y'] + (z0['height'] - hh) / 2
+        return hx, hy, hw, hh
 
     def _house_plan(self, ax, layout, L, W):
         hx,hy,hw,hh = self._house_bbox(layout,L,W)
