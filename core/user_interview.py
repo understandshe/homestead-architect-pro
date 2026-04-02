@@ -1,13 +1,13 @@
 """
-Smart 7-Question Interview System
-Determines optimal homestead layout
+Smart Interview System with Tree Slider
+Homestead Architect Pro 2026 - Global Edition
 """
 
 import streamlit as st
 from typing import Dict, Any
 
 class UserInterview:
-    """Interactive questionnaire to understand user needs"""
+    """Interactive questionnaire with tree count control"""
     
     QUESTIONS = [
         {
@@ -52,6 +52,15 @@ class UserInterview:
             "help": "Select all that apply"
         },
         {
+            "id": "tree_count",
+            "question": "How many fruit/nut trees do you want in your Food Forest?",
+            "type": "slider",
+            "min": 5,
+            "max": 50,
+            "default": 15,
+            "help": "More trees = more income but needs more space"
+        },
+        {
             "id": "budget",
             "question": "What is your budget range?",
             "type": "select",
@@ -64,20 +73,20 @@ class UserInterview:
         """Run the interview and return answers"""
         answers = {}
         
-        st.subheader("Answer 7 Simple Questions")
-        st.caption("Our AI will design your perfect homestead based on these answers")
+        st.subheader("🌱 Design Your Homestead")
+        st.caption("Answer these questions for your custom permaculture design")
         
         with st.form("homestead_interview"):
             for q in self.QUESTIONS:
                 answers[q['id']] = self._render_question(q)
             
             submitted = st.form_submit_button(
-                "Generate My Homestead Design",
-                use_container_width=True
+                "🚀 Generate My Homestead Design",
+                use_container_width=True,
+                type="primary"
             )
         
         if submitted:
-            # Validate
             if not answers.get('location'):
                 st.error("Please enter your location")
                 return None
@@ -103,9 +112,9 @@ class UserInterview:
         elif q['type'] == 'dimensions':
             col1, col2 = st.columns(2)
             with col1:
-                length = st.number_input("Length", 10, 10000, 100, help="feet or meters")
+                length = st.number_input("Length (ft)", 10, 10000, 100, help="feet or meters")
             with col2:
-                width = st.number_input("Width", 10, 10000, 100, help="feet or meters")
+                width = st.number_input("Width (ft)", 10, 10000, 100, help="feet or meters")
             return {"length": length, "width": width}
         
         elif q['type'] == 'select':
@@ -121,6 +130,16 @@ class UserInterview:
                 label=q['id'],
                 options=q['options'],
                 default=["None"],
+                help=q.get('help', ''),
+                label_visibility="collapsed"
+            )
+        
+        elif q['type'] == 'slider':
+            return st.slider(
+                label=q['id'],
+                min_value=q.get('min', 5),
+                max_value=q.get('max', 50),
+                value=q.get('default', 15),
                 help=q.get('help', ''),
                 label_visibility="collapsed"
             )
