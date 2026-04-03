@@ -14,28 +14,17 @@ class Visualizer3D:
 <style>
 body {{ margin:0; overflow:hidden; background:#000; }}
 canvas {{ display:block; }}
-#ui {{
- position:absolute;
- top:15px;
- left:15px;
- color:white;
- background:rgba(0,0,0,0.7);
- padding:10px;
- border-radius:6px;
- font-family:sans-serif;
-}}
 </style>
 </head>
 
 <body>
-
-<div id="ui">🚀 Architect Pro 2026</div>
 
 <script type="module">
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128/build/three.module.js';
 import {{ OrbitControls }} from 'https://cdn.jsdelivr.net/npm/three@0.128/examples/jsm/controls/OrbitControls.js';
 
+/* ========= DATA ========= */
 const data = {json_layout};
 const L = data.dimensions?.L || 100;
 const W = data.dimensions?.W || 100;
@@ -45,121 +34,95 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xaec6cf);
 
 /* ========= CAMERA ========= */
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 2000);
-camera.position.set(L, L*0.8, L);
-camera.lookAt(0,0,0);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / 750, 0.1, 2000);
+camera.position.set(80, 60, 80);
+camera.lookAt(0, 0, 0);
 
 /* ========= RENDERER ========= */
-const renderer = new THREE.WebGLRenderer({{ antialias:true }});
-renderer.setSize(window.innerWidth, window.innerHeight);
+const renderer = new THREE.WebGLRenderer({{ antialias: true }});
+const width = window.innerWidth;
+const height = 750;
+
+renderer.setSize(width, height);
 renderer.setPixelRatio(window.devicePixelRatio);
-
-renderer.physicallyCorrectLights = true;
-renderer.outputEncoding = THREE.sRGBEncoding;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
-
 renderer.shadowMap.enabled = true;
 
 document.body.appendChild(renderer.domElement);
 
 /* ========= LIGHT ========= */
-const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-sun.position.set(L, 150, W/2);
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
+scene.add(hemiLight);
+
+const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+sun.position.set(50, 100, 50);
 sun.castShadow = true;
-
-sun.shadow.mapSize.width = 2048;
-sun.shadow.mapSize.height = 2048;
-
 scene.add(sun);
-
-scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
 /* ========= GROUND ========= */
 const ground = new THREE.Mesh(
- new THREE.PlaneGeometry(L*2, W*2),
- new THREE.MeshStandardMaterial({{ color:0x567d46, roughness:1 }})
+  new THREE.PlaneGeometry(L * 2, W * 2),
+  new THREE.MeshStandardMaterial({{ color: 0x567d46 }})
 );
-
-ground.rotation.x = -Math.PI/2;
+ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
-
+ground.material.side = THREE.DoubleSide;
 scene.add(ground);
 
-/* ========= HELPERS ========= */
-const mat = (c) => new THREE.MeshStandardMaterial({{
- color:c,
- roughness:0.7,
- metalness:0.2
-}});
+/* ========= DEBUG CUBE ========= */
+const cube = new THREE.Mesh(
+  new THREE.BoxGeometry(10, 10, 10),
+  new THREE.MeshStandardMaterial({{ color: 0xff0000 }})
+);
+cube.position.y = 5;
+scene.add(cube);
 
 /* ========= HOUSE ========= */
-const createHouse = (x,z) => {{
- const g = new THREE.Group();
+const house = new THREE.Group();
 
- const body = new THREE.Mesh(
-   new THREE.BoxGeometry(20,12,20),
-   mat(0xdbad76)
- );
- body.position.y = 6;
- body.castShadow = true;
+const body = new THREE.Mesh(
+  new THREE.BoxGeometry(20, 12, 20),
+  new THREE.MeshStandardMaterial({{ color: 0xdbad76 }})
+);
+body.position.y = 6;
+body.castShadow = true;
 
- const roof = new THREE.Mesh(
-   new THREE.ConeGeometry(16,10,4),
-   mat(0x5a2d0c)
- );
- roof.position.y = 17;
- roof.rotation.y = Math.PI/4;
- roof.castShadow = true;
+const roof = new THREE.Mesh(
+  new THREE.ConeGeometry(16, 10, 4),
+  new THREE.MeshStandardMaterial({{ color: 0x5a2d0c }})
+);
+roof.position.y = 17;
+roof.rotation.y = Math.PI / 4;
 
- g.add(body, roof);
- g.position.set(x,0,z);
-
- scene.add(g);
-}};
-
-/* ========= TREE ========= */
-const createTree = (x,z) => {{
- const g = new THREE.Group();
-
- const trunk = new THREE.Mesh(
-   new THREE.CylinderGeometry(1,1.5,8,10),
-   mat(0x4d2911)
- );
- trunk.position.y = 4;
- trunk.castShadow = true;
-
- const leaves = new THREE.Mesh(
-   new THREE.SphereGeometry(6,12,12),
-   mat(0x2e7d32)
- );
- leaves.position.y = 12;
- leaves.castShadow = true;
-
- g.add(trunk, leaves);
- g.position.set(x,0,z);
-
- scene.add(g);
-}};
-
-/* ========= DATA ========= */
-const hPos = data.house_position || "Center";
-let hX = 0, hZ = 0;
-
-if(hPos === "North") hZ = -W/3;
-if(hPos === "South") hZ = W/3;
-
-createHouse(hX, hZ);
+house.add(body, roof);
+scene.add(house);
 
 /* ========= TREES ========= */
-const treeCount = data.tree_count || 20;
+function createTree(x, z) {{
+  const g = new THREE.Group();
 
-for(let i=0;i<treeCount;i++) {{
- const tx = (Math.random()-0.5)*(L*0.9);
- const tz = (Math.random()-0.5)*(W*0.9);
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(1, 1.5, 8, 10),
+    new THREE.MeshStandardMaterial({{ color: 0x4d2911 }})
+  );
+  trunk.position.y = 4;
 
- if(Math.abs(tx-hX)>20 || Math.abs(tz-hZ)>20)
-   createTree(tx,tz);
+  const leaves = new THREE.Mesh(
+    new THREE.SphereGeometry(6, 12, 12),
+    new THREE.MeshStandardMaterial({{ color: 0x2e7d32 }})
+  );
+  leaves.position.y = 12;
+
+  g.add(trunk, leaves);
+  g.position.set(x, 0, z);
+
+  scene.add(g);
+}}
+
+for (let i = 0; i < 20; i++) {{
+  createTree(
+    (Math.random() - 0.5) * L,
+    (Math.random() - 0.5) * W
+  );
 }}
 
 /* ========= CONTROLS ========= */
@@ -168,24 +131,26 @@ controls.enableDamping = true;
 
 /* ========= LOOP ========= */
 function animate() {{
- requestAnimationFrame(animate);
- controls.update();
- renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
 }}
-
 animate();
 
 /* ========= RESIZE ========= */
 window.addEventListener('resize', () => {{
- camera.aspect = window.innerWidth / window.innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(window.innerWidth, window.innerHeight);
+  const w = window.innerWidth;
+  const h = 750;
+
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
 }});
 
 </script>
+
 </body>
 </html>
 """
 
         st.components.v1.html(html_template, height=750, scrolling=True)
-        
