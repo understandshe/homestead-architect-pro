@@ -13,81 +13,101 @@ class Visualizer3D:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {{ margin:0; overflow:hidden; background:#87CEEB; }} 
-        canvas {{ display:block; }}
-        #ui {{ position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; font-family: sans-serif; pointer-events: none; }}
+        #ui {{ position: absolute; top: 15px; left: 15px; color: white; background: rgba(0,0,0,0.7); 
+               padding: 15px; border-radius: 10px; font-family: sans-serif; pointer-events: none; border: 1px solid rgba(255,255,255,0.2); }}
     </style>
 </head>
 <body>
-    <div id="ui">🏗️ 3D View: Interactive Mode</div>
+    <div id="ui">
+        <b>🌿 {layout_data.get('location', 'Modern Homestead')}</b><br>
+        <small>Realistic 3D Engine v7.0</small>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
     <script>
-        // --- 1. SETUP ---
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xaec6cf);
-        
-        const renderer = new THREE.WebGLRenderer({{ antialias: true }});
-        renderer.setSize(window.innerWidth, 750);
-        renderer.shadowMap.enabled = true;
-        document.body.appendChild(renderer.domElement);
-
-        // --- 2. DATA ---
         const data = {json_layout};
         const L = data.dimensions?.L || 100;
         const W = data.dimensions?.W || 100;
 
-        // --- 3. CAMERA ---
-        // कैमरे को फिक्स 100 की दूरी पर रखा है ताकि नज़ारा साफ़ दिखे
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / 750, 1, 10000);
-        camera.position.set(80, 60, 80); 
+        // --- 1. SCENE & RENDERER ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xaec6cf);
+        
+        const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
+        renderer.setSize(window.innerWidth, 750);
+        renderer.shadowMap.enabled = true; // SHADOW ON
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
 
-        // Lighting
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const sun = new THREE.DirectionalLight(0xffffff, 1);
-        sun.position.set(100, 200, 100);
+        // --- 2. CAMERA ---
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / 750, 1, 10000);
+        camera.position.set(L*0.8, L*0.6, L*0.8); 
+
+        // --- 3. PRO LIGHTING ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(L, 200, W);
         sun.castShadow = true;
+        sun.shadow.mapSize.width = 2048; // Sharp Shadows
+        sun.shadow.mapSize.height = 2048;
         scene.add(sun);
 
         // --- 4. GROUND ---
         const ground = new THREE.Mesh(
             new THREE.PlaneGeometry(L, W),
-            new THREE.MeshStandardMaterial({{ color: 0x567d46, side: THREE.DoubleSide }})
+            new THREE.MeshStandardMaterial({{ color: 0x4d8c4d, roughness: 0.8 }})
         );
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
 
-        // --- 5. CENTER HOUSE ---
-        const house = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(20, 12, 20), new THREE.MeshStandardMaterial({{ color: 0xdbad76 }}));
-        body.position.y = 6;
-        body.castShadow = true;
-        const roof = new THREE.Mesh(new THREE.ConeGeometry(16, 10, 4), new THREE.MeshStandardMaterial({{ color: 0x5a2d0c }}));
-        roof.position.y = 17;
-        roof.rotation.y = Math.PI / 4;
-        house.add(body, roof);
-        scene.add(house);
+        // --- 5. HOUSE (Realistic Geometry) ---
+        const createHouse = () => {{
+            const g = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(22, 14, 18), new THREE.MeshStandardMaterial({{color: 0xe0e0e0}}));
+            body.position.y = 7; body.castShadow = true;
+            const roof = new THREE.Mesh(new THREE.ConeGeometry(18, 12, 4), new THREE.MeshStandardMaterial({{color: 0x4b2c20}}));
+            roof.position.y = 19; roof.rotation.y = Math.PI/4; roof.castShadow = true;
+            g.add(body, roof);
+            
+            // Sync Position with 2D Logic
+            const hPos = data.house_position || 'Center';
+            if(hPos === 'West') g.position.x = -L/3;
+            if(hPos === 'East') g.position.x = L/3;
+            if(hPos === 'North') g.position.z = -W/3;
+            if(hPos === 'South') g.position.z = W/3;
+            
+            scene.add(g);
+        }};
+        createHouse();
 
-        // --- 6. TREES ---
+        // --- 6. FEATURES (Pond, Solar) ---
+        if(data.features?.pond) {{
+            const p = data.features.pond;
+            const pond = new THREE.Mesh(new THREE.CircleGeometry(p.radius, 32), new THREE.MeshStandardMaterial({{color: 0x0077be, transparent:true, opacity:0.8}}));
+            pond.rotation.x = -Math.PI/2;
+            pond.position.set(p.x - L/2, 0.1, p.y - W/2);
+            scene.add(pond);
+        }}
+
+        // --- 7. TREES ---
         const treePlacements = data.tree_placements || [];
         treePlacements.forEach(t => {{
             const g = new THREE.Group();
-            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 8), new THREE.MeshStandardMaterial({{ color: 0x4d2911 }}));
-            trunk.position.y = 4;
-            const leaves = new THREE.Mesh(new THREE.SphereGeometry(6), new THREE.MeshStandardMaterial({{ color: 0x2e7d32 }}));
-            leaves.position.y = 12;
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.5, 8), new THREE.MeshStandardMaterial({{color: 0x3d2b1f}}));
+            trunk.position.y = 4; trunk.castShadow = true;
+            const leaves = new THREE.Mesh(new THREE.SphereGeometry(6), new THREE.MeshStandardMaterial({{color: 0x2d5a27}}));
+            leaves.position.y = 12; leaves.castShadow = true;
             g.add(trunk, leaves);
-            
-            // डेटा के हिसाब से पोजीशन (सेंटर से ऑफसेट)
             g.position.set(t.x - L/2, 0, t.y - W/2);
             scene.add(g);
         }});
 
-        // --- 7. CONTROLS ---
+        // --- 8. CONTROLS ---
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.target.set(0, 0, 0);
         controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
 
         function animate() {{
             requestAnimationFrame(animate);
