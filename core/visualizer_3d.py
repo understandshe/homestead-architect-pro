@@ -12,18 +12,17 @@ class Visualizer3D:
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body {{ margin: 0; background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 100%); overflow: hidden; }}
+                body {{ margin: 0; background: #87CEEB; overflow: hidden; }}
                 #ui {{ position: absolute; top: 15px; left: 15px; color: white; background: rgba(0,0,0,0.7); 
-                       padding: 15px; border-radius: 12px; font-family: 'Segoe UI', sans-serif; pointer-events: none;
-                       border: 1px solid rgba(255,255,255,0.2); }}
+                       padding: 15px; border-radius: 12px; font-family: sans-serif; pointer-events: none; }}
             </style>
             <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
         </head>
         <body>
             <div id="ui">
-                <b style="font-size:16px;">🌿 {layout_data.get('location', 'Global Homestead')}</b><br>
-                <small>Plot Area: {layout_data.get('total_sqft', 0):,.0f} sq.ft.</small>
+                <b>🏡 {layout_data.get('location', 'My Homestead')}</b><br>
+                <small>Mode: Interactive 3D Architect</small>
             </div>
             
             <script>
@@ -31,89 +30,97 @@ class Visualizer3D:
                 const L = data.dimensions?.L || 100;
                 const W = data.dimensions?.W || 100;
 
+                // --- ENGINE SETUP ---
                 const scene = new THREE.Scene();
-                const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
-                const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
+                scene.background = new THREE.Color(0x87CEEB);
+                const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 5000);
+                const renderer = new THREE.WebGLRenderer({{ antialias: true }});
                 renderer.setSize(window.innerWidth, window.innerHeight);
-                renderer.shadowMap.enabled = true; // Enable Shadows
-                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                renderer.shadowMap.enabled = true;
                 document.body.appendChild(renderer.domElement);
 
-                // Professional Lighting
-                scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+                scene.add(new THREE.AmbientLight(0xffffff, 0.6));
                 const sun = new THREE.DirectionalLight(0xffffff, 1.2);
                 sun.position.set(L, 200, W);
                 sun.castShadow = true;
-                // Better Shadow Resolution
-                sun.shadow.mapSize.width = 1024;
-                sun.shadow.mapSize.height = 1024;
                 scene.add(sun);
 
-                // --- Ground with Realistic Texture Look ---
-                const groundGeo = new THREE.PlaneGeometry(L, W);
-                const groundMat = new THREE.MeshStandardMaterial({{ 
-                    color: 0x448a44, 
-                    roughness: 0.8,
-                    metalness: 0.1
-                }});
-                const ground = new THREE.Mesh(groundGeo, groundMat);
+                // --- GROUND ---
+                const ground = new THREE.Mesh(
+                    new THREE.PlaneGeometry(L, W),
+                    new THREE.MeshStandardMaterial({{ color: 0x4a934a }})
+                );
                 ground.rotation.x = -Math.PI / 2;
                 ground.receiveShadow = true;
                 scene.add(ground);
 
-                // --- SMART HOUSE PLACEMENT (Syncs with 2D) ---
-                const createHouse = () => {{
-                    const g = new THREE.Group();
-                    // Walls
-                    const body = new THREE.Mesh(new THREE.BoxGeometry(20, 12, 16), new THREE.MeshStandardMaterial({{color: 0xefebe9}}));
-                    body.position.y = 6;
-                    body.castShadow = true;
-                    // Roof
-                    const roof = new THREE.Mesh(new THREE.ConeGeometry(16, 10, 4), new THREE.MeshStandardMaterial({{color: 0x3e2723}}));
-                    roof.position.y = 17;
-                    roof.rotation.y = Math.PI / 4;
-                    roof.castShadow = true;
-                    g.add(body, roof);
+                // --- HELPER: COORDINATE TRANSFORM ---
+                // Transforms 2D (x,y) to 3D (x,z) centered
+                const getPos = (x, y) => ({{ x: x - L/2, z: y - W/2 }});
 
-                    // Position logic based on 'house_position'
-                    const pos = data.house_position || 'Center';
-                    if(pos === 'North') g.position.z = -(W/2.5);
-                    if(pos === 'South') g.position.z = (W/2.5);
-                    if(pos === 'East')  g.position.x = (L/2.5);
-                    if(pos === 'West')  g.position.x = -(L/2.5);
-                    
-                    scene.add(g);
-                }};
-                createHouse();
+                // --- 1. DYNAMIC HOUSE ---
+                const hX = data.house_position === 'West' ? -L/3 : (data.house_position === 'East' ? L/3 : 0);
+                const hZ = data.house_position === 'North' ? -W/3 : (data.house_position === 'South' ? W/3 : 0);
+                
+                const house = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(20, 12, 16), new THREE.MeshStandardMaterial({{color: 0xefebe9}}));
+                body.position.y = 6; body.castShadow = true;
+                const roof = new THREE.Mesh(new THREE.ConeGeometry(16, 10, 4), new THREE.MeshStandardMaterial({{color: 0x3e2723}}));
+                roof.position.y = 17; roof.rotation.y = Math.PI/4; roof.castShadow = true;
+                house.add(body, roof);
+                house.position.set(hX, 0, hZ);
+                scene.add(house);
 
-                // --- DETAILED TREES (By Species) ---
-                const speciesColors = {{
-                    'Mango': 0x1b5e20, 'Coconut': 0x2e7d32, 'Lemon': 0x43a047
-                }};
+                // --- 2. DYNAMIC FEATURES (User Output Sync) ---
+                const features = data.features || {{}};
 
-                const placements = data.tree_placements || [];
-                placements.forEach(t => {{
-                    const treeGroup = new THREE.Group();
-                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 8), new THREE.MeshStandardMaterial({{color: 0x4d2911}}));
-                    trunk.position.y = 4;
-                    trunk.castShadow = true;
+                // Solar Panels
+                if (features.solar) {{
+                    const s = features.solar;
+                    const pos = getPos(s.x + s.width/2, s.y + s.height/2);
+                    const panel = new THREE.Mesh(new THREE.BoxGeometry(s.width, 1, s.height), new THREE.MeshStandardMaterial({{color: 0x1a237e}}));
+                    panel.position.set(pos.x, 2, pos.z);
+                    panel.rotation.x = -0.3; // Tilted towards sun
+                    scene.add(panel);
+                }}
 
-                    const leafColor = speciesColors[t.species] || 0x228b22;
-                    const leaves = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 12), new THREE.MeshStandardMaterial({{color: leafColor}}));
-                    leaves.position.y = 12;
-                    leaves.castShadow = true;
+                // Pond / Water
+                if (features.pond) {{
+                    const p = features.pond;
+                    const pos = getPos(p.x, p.y);
+                    const water = new THREE.Mesh(new THREE.CircleGeometry(p.radius, 32), new THREE.MeshStandardMaterial({{color: 0x0288d1, transparent: true, opacity: 0.8}}));
+                    water.rotation.x = -Math.PI/2;
+                    water.position.set(pos.x, 0.1, pos.z);
+                    scene.add(water);
+                }}
 
-                    treeGroup.add(trunk, leaves);
-                    // Standard Three.js coordinates: Y is up, X/Z is ground
-                    treeGroup.position.set(t.x - L/2, 0, t.y - W/2); 
-                    scene.add(treeGroup);
+                // Greenhouse
+                if (features.greenhouse) {{
+                    const gh = features.greenhouse;
+                    const pos = getPos(gh.x + gh.width/2, gh.y + gh.height/2);
+                    const glass = new THREE.Mesh(new THREE.BoxGeometry(gh.width, 8, gh.height), new THREE.MeshStandardMaterial({{color: 0xb2dfdb, transparent: true, opacity: 0.4}}));
+                    glass.position.set(pos.x, 4, pos.z);
+                    scene.add(glass);
+                }}
+
+                // --- 3. DYNAMIC TREES ---
+                const treePlacements = data.tree_placements || [];
+                treePlacements.forEach(t => {{
+                    const pos = getPos(t.x, t.y);
+                    const tree = new THREE.Group();
+                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1, 6), new THREE.MeshStandardMaterial({{color: 0x4d2911}}));
+                    trunk.position.y = 3; trunk.castShadow = true;
+                    const leaves = new THREE.Mesh(new THREE.SphereGeometry(5), new THREE.MeshStandardMaterial({{color: 0x2e7d32}}));
+                    leaves.position.y = 10; leaves.castShadow = true;
+                    tree.add(trunk, leaves);
+                    tree.position.set(pos.x, 0, pos.z);
+                    scene.add(tree);
                 }});
 
-                // --- CONTROLS ---
+                // --- CONTROLS & ANIMATION ---
                 const controls = new THREE.OrbitControls(camera, renderer.domElement);
-                camera.position.set(L, L*0.7, L);
+                camera.position.set(L*0.8, L*0.6, L*0.8);
                 controls.enableDamping = true;
-                controls.dampingFactor = 0.05;
 
                 function animate() {{
                     requestAnimationFrame(animate);
