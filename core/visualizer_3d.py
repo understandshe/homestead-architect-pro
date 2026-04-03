@@ -3,10 +3,8 @@ import json
 
 class Visualizer3D:
     def create(self, layout_data: dict):
-        # Python data को JSON में बदलें ताकि JS समझ सके
         json_layout = json.dumps(layout_data)
         
-        # पूरा 3D इंजन अब इसी एक स्ट्रिंग के अंदर है
         html_template = f"""
         <!DOCTYPE html>
         <html>
@@ -14,84 +12,109 @@ class Visualizer3D:
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body {{ margin: 0; background-color: #87CEEB; overflow: hidden; touch-action: none; }}
-                #ui {{ position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.6); 
-                       padding: 12px; border-radius: 8px; font-family: sans-serif; pointer-events: none; }}
-                canvas {{ display: block; }}
+                body {{ margin: 0; background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 100%); overflow: hidden; }}
+                #ui {{ position: absolute; top: 15px; left: 15px; color: white; background: rgba(0,0,0,0.7); 
+                       padding: 15px; border-radius: 12px; font-family: 'Segoe UI', sans-serif; pointer-events: none;
+                       border: 1px solid rgba(255,255,255,0.2); }}
             </style>
             <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
         </head>
         <body>
             <div id="ui">
-                <b>🌿 Homestead 3D View</b><br>
-                Plot: {layout_data.get('dimensions', {}).get('L', 100)}x{layout_data.get('dimensions', {}).get('W', 100)} ft
+                <b style="font-size:16px;">🌿 {layout_data.get('location', 'Global Homestead')}</b><br>
+                <small>Plot Area: {layout_data.get('total_sqft', 0):,.0f} sq.ft.</small>
             </div>
             
             <script>
-                // --- 1. SETUP ENGINE ---
-                const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x87CEEB);
-                
-                const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
-                const renderer = new THREE.WebGLRenderer({{ antialias: true }});
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                renderer.setPixelRatio(window.devicePixelRatio);
-                document.body.appendChild(renderer.domElement);
-
-                // Lighting
-                scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-                const sun = new THREE.DirectionalLight(0xffffff, 1);
-                sun.position.set(200, 400, 200);
-                scene.add(sun);
-
-                // --- 2. DATA & GROUND ---
                 const data = {json_layout};
                 const L = data.dimensions?.L || 100;
                 const W = data.dimensions?.W || 100;
 
+                const scene = new THREE.Scene();
+                const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
+                const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.shadowMap.enabled = true; // Enable Shadows
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.body.appendChild(renderer.domElement);
+
+                // Professional Lighting
+                scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+                const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+                sun.position.set(L, 200, W);
+                sun.castShadow = true;
+                // Better Shadow Resolution
+                sun.shadow.mapSize.width = 1024;
+                sun.shadow.mapSize.height = 1024;
+                scene.add(sun);
+
+                // --- Ground with Realistic Texture Look ---
                 const groundGeo = new THREE.PlaneGeometry(L, W);
-                const groundMat = new THREE.MeshStandardMaterial({{ color: 0x3d8c40, side: THREE.DoubleSide }});
+                const groundMat = new THREE.MeshStandardMaterial({{ 
+                    color: 0x448a44, 
+                    roughness: 0.8,
+                    metalness: 0.1
+                }});
                 const ground = new THREE.Mesh(groundGeo, groundMat);
                 ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
                 scene.add(ground);
 
-                // --- 3. MODELS (Built-in) ---
-                // House
-                const createHouse = (x, z) => {{
+                // --- SMART HOUSE PLACEMENT (Syncs with 2D) ---
+                const createHouse = () => {{
                     const g = new THREE.Group();
-                    const b = new THREE.Mesh(new THREE.BoxGeometry(15, 12, 18), new THREE.MeshStandardMaterial({{color: 0xdbad76}}));
-                    b.position.y = 6;
-                    const r = new THREE.Mesh(new THREE.ConeGeometry(14, 10, 4), new THREE.MeshStandardMaterial({{color: 0x5a2d0c}}));
-                    r.position.y = 17;
-                    r.rotation.y = Math.PI / 4;
-                    g.add(b, r);
-                    g.position.set(x, 0, z);
+                    // Walls
+                    const body = new THREE.Mesh(new THREE.BoxGeometry(20, 12, 16), new THREE.MeshStandardMaterial({{color: 0xefebe9}}));
+                    body.position.y = 6;
+                    body.castShadow = true;
+                    // Roof
+                    const roof = new THREE.Mesh(new THREE.ConeGeometry(16, 10, 4), new THREE.MeshStandardMaterial({{color: 0x3e2723}}));
+                    roof.position.y = 17;
+                    roof.rotation.y = Math.PI / 4;
+                    roof.castShadow = true;
+                    g.add(body, roof);
+
+                    // Position logic based on 'house_position'
+                    const pos = data.house_position || 'Center';
+                    if(pos === 'North') g.position.z = -(W/2.5);
+                    if(pos === 'South') g.position.z = (W/2.5);
+                    if(pos === 'East')  g.position.x = (L/2.5);
+                    if(pos === 'West')  g.position.x = -(L/2.5);
+                    
                     scene.add(g);
                 }};
-                createHouse(0, 0);
+                createHouse();
 
-                // Trees
-                const treeCount = data.tree_count || 20;
-                for(let i=0; i<treeCount; i++) {{
-                    const tx = (Math.random() - 0.5) * (L * 0.8);
-                    const tz = (Math.random() - 0.5) * (W * 0.8);
-                    if (Math.abs(tx) > 15 || Math.abs(tz) > 15) {{ // घर के ऊपर पेड़ न आए
-                        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 8), new THREE.MeshStandardMaterial({{color: 0x4d2911}}));
-                        const leaves = new THREE.Mesh(new THREE.SphereGeometry(6), new THREE.MeshStandardMaterial({{color: 0x228b22}}));
-                        trunk.position.set(tx, 4, tz);
-                        leaves.position.set(tx, 12, tz);
-                        scene.add(trunk, leaves);
-                    }}
-                }}
+                // --- DETAILED TREES (By Species) ---
+                const speciesColors = {{
+                    'Mango': 0x1b5e20, 'Coconut': 0x2e7d32, 'Lemon': 0x43a047
+                }};
 
-                // --- 4. CONTROLS ---
+                const placements = data.tree_placements || [];
+                placements.forEach(t => {{
+                    const treeGroup = new THREE.Group();
+                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 8), new THREE.MeshStandardMaterial({{color: 0x4d2911}}));
+                    trunk.position.y = 4;
+                    trunk.castShadow = true;
+
+                    const leafColor = speciesColors[t.species] || 0x228b22;
+                    const leaves = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 12), new THREE.MeshStandardMaterial({{color: leafColor}}));
+                    leaves.position.y = 12;
+                    leaves.castShadow = true;
+
+                    treeGroup.add(trunk, leaves);
+                    // Standard Three.js coordinates: Y is up, X/Z is ground
+                    treeGroup.position.set(t.x - L/2, 0, t.y - W/2); 
+                    scene.add(treeGroup);
+                }});
+
+                // --- CONTROLS ---
                 const controls = new THREE.OrbitControls(camera, renderer.domElement);
-                camera.position.set(L, L*0.8, L);
+                camera.position.set(L, L*0.7, L);
                 controls.enableDamping = true;
-                controls.update();
+                controls.dampingFactor = 0.05;
 
-                // --- 5. RENDER LOOP ---
                 function animate() {{
                     requestAnimationFrame(animate);
                     controls.update();
