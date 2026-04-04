@@ -1,7 +1,4 @@
-
-# Fixed app.py with proper imports and realistic 3D visualizer integration
-
-fixed_app_code = '''"""
+"""
 Homestead Architect Pro 2026 — v3.1 REALISTIC EDITION
 Fixed imports + Realistic 3D Visualizer Integration
 """
@@ -483,34 +480,3 @@ def download_tab(watermark_enabled):
 
 if __name__ == '__main__':
     main()
-'''
-
-# Save the fixed app.py
-with open('/mnt/kimi/output/app_fixed.py', 'w', encoding='utf-8') as f:
-    f.write(fixed_app_code)
-
-print("✅ FIXED app.py SAVED!")
-print(f"📏 Size: {len(fixed_app_code)} characters")
-print("\n" + "="*70)
-print("🔧 FIXES IMPLEMENTED:")
-print("="*70)
-print("1. ✅ Multiple fallback imports for visualizer_3d")
-print("   - Try: realistic_visualizer_3d (new)")
-print("   - Fallback: core.visualizer_3d (original)")
-print("   - Fallback: visualizer_3d (root)")
-print("   - Shows error if none found")
-print("\n2. ✅ Visualizer mode indicator in sidebar")
-print("   - Shows REALISTIC, STANDARD, or NOT AVAILABLE")
-print("\n3. ✅ Safe 3D tab rendering")
-print("   - Checks if visualizer exists before using")
-print("   - Shows helpful empty state")
-print("   - Try-catch around rendering")
-print("\n4. ✅ Auto-detection of visualizer type")
-print("   - Checks for user_models param (realistic)")
-print("   - Falls back to standard create()")
-print("\n5. ✅ Better error messages")
-print("   - Shows which files are expected")
-print("   - Exception details for debugging")
-print("\n6. ✅ Enhanced UI styling")
-print("   - Better headers, metrics, info boxes")
-print("   - Responsive layout")
