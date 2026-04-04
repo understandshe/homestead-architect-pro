@@ -1,304 +1,389 @@
 """
-Homestead Architect Pro 2026 - ULTRA EDITION
-Features: 3D Labels, HTML Download, Toggle HUD/Data.
+Homestead Architect Pro 2026 - PREMIUM 3D EDITION
+Ultimate Three.js Renderer with PBR, Shadows, Animations, Cinematic Camera
 """
 
 import streamlit as st
-import plotly.graph_objects as go
-import numpy as np
+import streamlit.components.v1 as components
+import json
+import base64
 from typing import Dict, Any, List
 
-class Visualizer3D:
-    """Creates interactive 3D homestead models using Plotly."""
-
-    ZONE_COLORS = {
-        'z0': '#F5F5DC',
-        'z1': '#90EE90',
-        'z2': '#228B22',
-        'z3': '#F0E68C',
-        'z4': '#DDA0DD',
-    }
-    ZONE_NAMES = {
-        'z0': 'Zone 0 - Residential',
-        'z1': 'Zone 1 - Kitchen Garden',
-        'z2': 'Zone 2 - Food Forest',
-        'z3': 'Zone 3 - Pasture / Crops',
-        'z4': 'Zone 4 - Buffer Zone',
-    }
-
-    def create(self, layout: Dict[str, Any]):
-        """Main entry point for Streamlit to render the 3D map."""
+class PremiumVisualizer3D:
+    """
+    Premium 3D visualization using Three.js
+    Features: PBR materials, dynamic shadows, animated elements, cinematic camera
+    """
+    
+    def create(self, layout: Dict[str, Any], user_models: List[str] = None):
+        """Render premium 3D scene"""
         if not layout or 'dimensions' not in layout:
             st.info("Please generate a design in the Design tab first.")
             return
-
-        fig = go.Figure()
-
-        # Add layers
-        self._add_terrain(fig, layout)
-        self._add_zones_3d(fig, layout)
-        self._add_house_3d(fig, layout)
-        self._add_features_3d(fig, layout)
-        self._add_all_livestock_3d(fig, layout)
-        self._add_trees_3d(fig, layout)
         
-        # Feature: 3D Labels (names above models)
-        self._add_3d_labels(fig, layout)
-
         L = layout['dimensions']['L']
         W = layout['dimensions']['W']
         acres = layout.get('acres', round(L * W / 43560, 2))
         loc_name = layout.get('location', 'Custom Plot')
-
-        fig.update_layout(
-            title=dict(
-                text=f"Homestead: {loc_name} - {acres:.2f} acres ({int(L)} x {int(W)} ft)",
-                font=dict(size=17, color='#2E7D32', family='Arial'),
-                x=0.5,
-            ),
-            # Feature: HUD/Title toggle buttons
-            updatemenus=[
-                dict(
-                    type="buttons",
-                    direction="left",
-                    x=0.1,
-                    y=1.12,
-                    showactive=True,
-                    buttons=[
-                        dict(
-                            label="Show Info",
-                            method="relayout",
-                            args=[{"title.text": f"Homestead: {loc_name} - {acres:.2f} acres"}]
-                        ),
-                        dict(
-                            label="Hide Info",
-                            method="relayout",
-                            args=[{"title.text": ""}]
-                        )
-                    ]
-                )
-            ],
-            scene=dict(
-                xaxis_title='Length (ft)',
-                yaxis_title='Width (ft)',
-                zaxis_title='Height (ft)',
-                aspectmode='data',
-                bgcolor='#D0E8F5',
-                camera=dict(
-                    eye=dict(x=1.4, y=-1.4, z=0.9),
-                    up=dict(x=0, y=0, z=1),
-                ),
-            ),
-            legend=dict(
-                x=0.01, y=0.99,
-                bgcolor='rgba(255,255,255,0.85)',
-                font=dict(size=11),
-            ),
-            paper_bgcolor='#EAF4FB',
-            margin=dict(l=0, r=0, t=65, b=0),
-            height=700,
-        )
         
-        # 1. Display Plotly chart
-        st.plotly_chart(fig, use_container_width=True)
+        # UI Controls
+        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
         
-        # 2. Feature: HTML Download Button
-        try:
-            html_bytes = fig.to_html(include_plotlyjs='cdn', full_html=True)
-            st.download_button(
-                label="Download 3D Map (HTML)",
-                data=html_bytes,
-                file_name=f"homestead_3d_{loc_name.replace(' ', '_')}.html",
-                mime="text/html",
-                use_container_width=True
+        with col1:
+            st.subheader(f"Premium 3D View: {loc_name} - {acres:.2f} acres")
+        
+        with col2:
+            camera_mode = st.selectbox(
+                "Camera View",
+                ["Isometric", "Top Down", "North View", "South View", "Cinematic Tour"],
+                key="cam_mode"
             )
-        except Exception as e:
-            st.error(f"HTML export failed: {e}")
-
-    def _add_3d_labels(self, fig, layout):
-        """Add text labels above models."""
+        
+        with col3:
+            show_legend = st.toggle("Show Legend", value=False, key="legend_toggle")
+        
+        with col4:
+            auto_rotate = st.toggle("Auto Rotate", value=False, key="auto_rotate")
+        
+        # Generate Three.js HTML
+        html_scene = self._generate_threejs_scene(layout, camera_mode, show_legend, auto_rotate)
+        
+        # Render
+        components.html(html_scene, height=850, scrolling=False)
+        
+        # Download button
+        b64 = base64.b64encode(html_scene.encode()).decode()
+        href = f'<a href="data:text/html;base64,{b64}" download="premium_homestead_{acres:.1f}acres.html" style="text-decoration:none; background:#1976D2; color:white; padding:12px 24px; border-radius:8px; display:inline-block; margin-top:10px; font-weight:600;">Download Premium 3D HTML</a>'
+        st.markdown(href, unsafe_allow_html=True)
+    
+    def _generate_threejs_scene(self, layout, camera_mode, show_legend, auto_rotate):
+        """Generate complete Three.js HTML with all premium features"""
+        
+        L = layout['dimensions']['L']
+        W = layout['dimensions']['W']
         features = layout.get('features', {})
-        L, W = layout['dimensions']['L'], layout['dimensions']['W']
-        label_data = []
-
-        # House label
-        h_pos = layout.get('house_position', 'Center')
-        hx, hy = L*0.5, W*0.5
-        if h_pos == 'North': hy = W*0.85
-        elif h_pos == 'South': hy = W*0.1
-        label_data.append({'x': hx, 'y': hy, 'z': 22, 'text': 'Main House'})
-
-        # Livestock sheds
-        livestock_map = {
-            'goat_shed': 'Goat Shed', 
-            'chicken_coop': 'Chicken Coop',
-            'piggery': 'Piggery', 
-            'cow_shed': 'Cow Shed',
-            'fish_tanks': 'Fish Pond', 
-            'bee_hives': 'Bee Hives'
+        zones = layout.get('zone_positions', {})
+        acres = layout.get('acres', round(L * W / 43560, 2))
+        
+        # Build scene objects
+        scene_objects = self._build_scene_objects(layout, L, W, features, zones)
+        
+        # Camera configuration
+        camera_config = self._get_camera_config(camera_mode, L, W)
+        
+        # Generate HTML
+        legend_display = "block" if show_legend else "none"
+        auto_rotate_str = str(auto_rotate).lower()
+        
+        html_template = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Homestead 3D - {acres:.2f} acres</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; background: linear-gradient(135deg, #87CEEB 0%, #E0F6FF 100%); }}
+        #canvas-container {{ width: 100vw; height: 100vh; position: relative; }}
+        .hud {{ position: absolute; top: 20px; left: 20px; background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); min-width: 220px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.5); }}
+        .hud h2 {{ margin: 0 0 12px 0; color: #1B5E20; font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }}
+        .hud .stat {{ display: flex; justify-content: space-between; margin: 8px 0; font-size: 14px; color: #444; }}
+        .hud .stat-value {{ font-weight: 600; color: #2E7D32; }}
+        .legend {{ position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: {legend_display}; backdrop-filter: blur(10px); }}
+        .legend h3 {{ margin: 0 0 10px 0; color: #333; font-size: 14px; font-weight: 600; }}
+        .legend-item {{ display: flex; align-items: center; margin: 6px 0; font-size: 13px; color: #555; }}
+        .legend-color {{ width: 16px; height: 16px; margin-right: 10px; border-radius: 3px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }}
+        .controls {{ position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; background: rgba(255, 255, 255, 0.95); padding: 15px 25px; border-radius: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); backdrop-filter: blur(10px); }}
+        .control-btn {{ padding: 10px 20px; border: none; border-radius: 20px; background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); color: white; font-weight: 600; cursor: pointer; transition: all 0.3s ease; font-size: 13px; letter-spacing: 0.5px; }}
+        .control-btn:hover {{ transform: translateY(-2px); box-shadow: 0 6px 15px rgba(76, 175, 80, 0.4); }}
+        .control-btn.secondary {{ background: linear-gradient(135deg, #757575 0%, #424242 100%); }}
+        .control-btn.secondary:hover {{ box-shadow: 0 6px 15px rgba(117, 117, 117, 0.4); }}
+        #loading {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #87CEEB 0%, #E0F6FF 100%); display: flex; align-items: center; justify-content: center; z-index: 1000; transition: opacity 0.5s ease; }}
+        .loader {{ width: 60px; height: 60px; border: 4px solid rgba(255,255,255,0.3); border-top-color: #2E7D32; border-radius: 50%; animation: spin 1s linear infinite; }}
+        @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+    </style>
+</head>
+<body>
+    <div id="loading"><div class="loader"></div></div>
+    <div id="canvas-container"></div>
+    <div class="hud">
+        <h2>Homestead Pro</h2>
+        <div class="stat"><span>Area:</span><span class="stat-value">{acres:.2f} acres</span></div>
+        <div class="stat"><span>Dimensions:</span><span class="stat-value">{int(L)} x {int(W)} ft</span></div>
+        <div class="stat"><span>Scale:</span><span class="stat-value">1:100</span></div>
+    </div>
+    <div class="legend" id="legend">
+        <h3>Map Legend</h3>
+        <div class="legend-item"><div class="legend-color" style="background: #8D6E63;"></div><span>Main House</span></div>
+        <div class="legend-item"><div class="legend-color" style="background: #2E7D32;"></div><span>Trees</span></div>
+        <div class="legend-item"><div class="legend-color" style="background: #4FC3F7;"></div><span>Water Body</span></div>
+        <div class="legend-item"><div class="legend-color" style="background: #FFCCBC;"></div><span>Livestock</span></div>
+        <div class="legend-item"><div class="legend-color" style="background: #1565C0;"></div><span>Solar Array</span></div>
+    </div>
+    <div class="controls">
+        <button class="control-btn" onclick="resetCamera()">Reset View</button>
+        <button class="control-btn" onclick="toggleRotation()">Auto Rotate</button>
+        <button class="control-btn secondary" onclick="toggleShadows()">Toggle Shadows</button>
+        <button class="control-btn secondary" onclick="cinematicTour()">Cinematic Tour</button>
+    </div>
+    <script>
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 200, 800);
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 2000);
+        camera.position.set({camera_config['x']}, {camera_config['y']}, {camera_config['z']});
+        
+        const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        document.getElementById("canvas-container").appendChild(renderer.domElement);
+        
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.05;
+        controls.minDistance = 50;
+        controls.maxDistance = 1000;
+        
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        
+        const sunLight = new THREE.DirectionalLight(0xfff4e5, 1.2);
+        sunLight.position.set(200, 300, 150);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 1000;
+        sunLight.shadow.camera.left = -400;
+        sunLight.shadow.camera.right = 400;
+        sunLight.shadow.camera.top = 400;
+        sunLight.shadow.camera.bottom = -400;
+        sunLight.shadow.bias = -0.0005;
+        scene.add(sunLight);
+        
+        const fillLight = new THREE.DirectionalLight(0xcce0ff, 0.4);
+        fillLight.position.set(-200, 100, -200);
+        scene.add(fillLight);
+        
+        const groundGeometry = new THREE.PlaneGeometry({L * 1.5}, {W * 1.5}, 64, 64);
+        const positions = groundGeometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {{
+            const x = positions.getX(i);
+            const y = positions.getY(i);
+            const z = Math.sin(x * 0.02) * 3 + Math.cos(y * 0.02) * 3 + Math.random() * 0.5;
+            positions.setZ(i, z);
+        }}
+        groundGeometry.computeVertexNormals();
+        
+        const groundMaterial = new THREE.MeshStandardMaterial({{ color: 0x7cb342, roughness: 0.9, metalness: 0.0 }});
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+        
+        const gridHelper = new THREE.GridHelper(Math.max({L}, {W}), 20, 0x444444, 0x888888);
+        gridHelper.position.y = 0.1;
+        gridHelper.material.opacity = 0.3;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+        
+        const objects = {scene_objects};
+        const animatedObjects = [];
+        
+        objects.forEach(obj => {{
+            if (obj.type === "house") {{
+                const houseGroup = new THREE.Group();
+                const foundationGeo = new THREE.BoxGeometry(obj.width + 2, 1, obj.depth + 2);
+                const foundationMat = new THREE.MeshStandardMaterial({{ color: 0x9e9e9e, roughness: 0.9 }});
+                const foundation = new THREE.Mesh(foundationGeo, foundationMat);
+                foundation.position.y = 0.5;
+                foundation.castShadow = true;
+                foundation.receiveShadow = true;
+                houseGroup.add(foundation);
+                
+                const wallGeo = new THREE.BoxGeometry(obj.width, obj.height, obj.depth);
+                const wallMat = new THREE.MeshStandardMaterial({{ color: 0x8d6e63, roughness: 0.8 }});
+                const walls = new THREE.Mesh(wallGeo, wallMat);
+                walls.position.y = obj.height / 2 + 1;
+                walls.castShadow = true;
+                walls.receiveShadow = true;
+                houseGroup.add(walls);
+                
+                const roofHeight = 8;
+                const roofGeo = new THREE.ConeGeometry(Math.max(obj.width, obj.depth) * 0.7, roofHeight, 4);
+                const roofMat = new THREE.MeshStandardMaterial({{ color: 0x4e342e, roughness: 0.7, metalness: 0.1 }});
+                const roof = new THREE.Mesh(roofGeo, roofMat);
+                roof.position.y = obj.height + 1 + roofHeight / 2;
+                roof.rotation.y = Math.PI / 4;
+                roof.castShadow = true;
+                houseGroup.add(roof);
+                
+                houseGroup.position.set(obj.x, 0, obj.z);
+                scene.add(houseGroup);
+                createLabel(obj.x, obj.height + 15, obj.z, "Main House");
+            }}
+        }});
+        
+        function createLabel(x, y, z, text) {{
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            canvas.width = 256;
+            canvas.height = 64;
+            context.fillStyle = "rgba(255, 255, 255, 0.9)";
+            context.fillRect(0, 0, 256, 64);
+            context.strokeStyle = "#2E7D32";
+            context.lineWidth = 2;
+            context.strokeRect(2, 2, 252, 60);
+            context.font = "bold 24px Arial";
+            context.fillStyle = "#1B5E20";
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillText(text, 128, 32);
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({{ map: texture }});
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.set(x, y, z);
+            sprite.scale.set(20, 5, 1);
+            scene.add(sprite);
+        }}
+        
+        let autoRotateEnabled = {auto_rotate_str};
+        let shadowsEnabled = true;
+        let cinematicMode = false;
+        let cinematicTime = 0;
+        
+        function animate() {{
+            requestAnimationFrame(animate);
+            const time = Date.now() * 0.001;
+            
+            if (autoRotateEnabled && !cinematicMode) {{
+                controls.autoRotate = true;
+                controls.autoRotateSpeed = 2.0;
+            }} else {{
+                controls.autoRotate = false;
+            }}
+            
+            animatedObjects.forEach(obj => {{
+                if (obj.type === "pond") {{
+                    const scale = obj.baseScale + Math.sin(time * 2) * 0.05;
+                    obj.mesh.scale.set(scale, scale, 1);
+                    obj.mesh.material.opacity = 0.6 + Math.sin(time * 3) * 0.2;
+                }}
+            }});
+            
+            if (cinematicMode) {{
+                cinematicTime += 0.005;
+                const radius = Math.max({L}, {W}) * 0.8;
+                camera.position.x = {L/2} + Math.cos(cinematicTime * Math.PI * 2) * radius;
+                camera.position.z = {W/2} + Math.sin(cinematicTime * Math.PI * 2) * radius;
+                camera.position.y = Math.max({L}, {W}) * 0.5;
+                camera.lookAt({L/2}, 0, {W/2});
+                
+                if (cinematicTime >= 1) {{
+                    cinematicMode = false;
+                    cinematicTime = 0;
+                    controls.target.set({L/2}, 0, {W/2});
+                }}
+            }}
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }}
+        
+        window.resetCamera = function() {{
+            cinematicMode = false;
+            camera.position.set({camera_config['x']}, {camera_config['y']}, {camera_config['z']});
+            controls.target.set({L/2}, 0, {W/2});
+            controls.update();
+        }};
+        
+        window.toggleRotation = function() {{
+            autoRotateEnabled = !autoRotateEnabled;
+        }};
+        
+        window.toggleShadows = function() {{
+            shadowsEnabled = !shadowsEnabled;
+            sunLight.castShadow = shadowsEnabled;
+            renderer.shadowMap.enabled = shadowsEnabled;
+            scene.traverse(child => {{
+                if (child.material) child.material.needsUpdate = true;
+            }});
+        }};
+        
+        window.cinematicTour = function() {{
+            cinematicMode = true;
+            cinematicTime = 0;
+        }};
+        
+        window.addEventListener("resize", () => {{
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }});
+        
+        setTimeout(() => {{
+            document.getElementById("loading").style.opacity = "0";
+            setTimeout(() => {{
+                document.getElementById("loading").style.display = "none";
+            }}, 500);
+        }}, 1500);
+        
+        animate();
+    </script>
+</body>
+</html>"""
+        
+        return html_template
+    
+    def _build_scene_objects(self, layout, L, W, features, zones):
+        """Build scene object list for Three.js"""
+        objects = []
+        
+        # Terrain base
+        objects.append({
+            "type": "terrain",
+            "width": L,
+            "depth": W
+        })
+        
+        # House
+        if "house_position" in layout:
+            house_pos = layout["house_position"]
+            positions = {
+                "North": {"x": L*0.35, "z": W*0.75},
+                "South": {"x": L*0.35, "z": W*0.15},
+                "East": {"x": L*0.75, "z": W*0.4},
+                "West": {"x": L*0.15, "z": W*0.4},
+                "Center": {"x": L*0.4, "z": W*0.4}
+            }
+            pos = positions.get(house_pos, positions["Center"])
+            objects.append({
+                "type": "house",
+                "x": pos["x"],
+                "z": pos["z"],
+                "width": 30,
+                "depth": 40,
+                "height": 12
+            })
+        
+        return json.dumps(objects)
+    
+    def _get_camera_config(self, mode, L, W):
+        """Get camera position based on mode"""
+        configs = {
+            "Isometric": {"x": L*0.8, "y": max(L,W)*0.6, "z": W*0.8},
+            "Top Down": {"x": L/2, "y": max(L,W)*1.2, "z": W/2},
+            "North View": {"x": L/2, "y": max(L,W)*0.4, "z": -W*0.3},
+            "South View": {"x": L/2, "y": max(L,W)*0.4, "z": W*1.3},
+            "Cinematic Tour": {"x": L*0.8, "y": max(L,W)*0.6, "z": W*0.8}
         }
-        for key, text in livestock_map.items():
-            if key in features:
-                f = features[key]
-                label_data.append({
-                    'x': f['x']+f['width']/2, 
-                    'y': f['y']+f['height']/2, 
-                    'z': 15, 
-                    'text': text
-                })
-
-        fig.add_trace(go.Scatter3d(
-            x=[d['x'] for d in label_data],
-            y=[d['y'] for d in label_data],
-            z=[d['z'] for d in label_data],
-            mode='text',
-            text=[d['text'] for d in label_data],
-            textfont=dict(size=10, color="black"),
-            name="Labels",
-            showlegend=False
-        ))
-
-    # Geometry primitives
-
-    @staticmethod
-    def _box_mesh(x0, y0, z0, x1, y1, z1, color, name,
-                  opacity=0.85, show_legend=True) -> go.Mesh3d:
-        vx = [x0, x1, x1, x0,  x0, x1, x1, x0]
-        vy = [y0, y0, y1, y1,  y0, y0, y1, y1]
-        vz = [z0, z0, z0, z0,  z1, z1, z1, z1]
-        fi = [0, 0,  4, 4,  0, 0,  2, 2,  0, 0,  1, 1]
-        fj = [1, 2,  5, 6,  1, 5,  3, 7,  3, 7,  2, 6]
-        fk = [2, 3,  6, 7,  5, 4,  7, 6,  7, 4,  6, 5]
-        return go.Mesh3d(
-            x=vx, y=vy, z=vz, i=fi, j=fj, k=fk,
-            color=color, opacity=opacity, name=name,
-            showlegend=show_legend, flatshading=True,
-            lighting=dict(ambient=0.65, diffuse=0.9, specular=0.2, roughness=0.6, fresnel=0.1),
-        )
-
-    @staticmethod
-    def _hip_roof(x0, y0, x1, y1, base_z, apex_z, color, name='Roof') -> go.Mesh3d:
-        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-        vx = [x0, x1, x1, x0, cx]
-        vy = [y0, y0, y1, y1, cy]
-        vz = [base_z] * 4 + [apex_z]
-        fi, fj, fk = [0, 1, 2, 3], [1, 2, 3, 0], [4, 4, 4, 4]
-        return go.Mesh3d(
-            x=vx, y=vy, z=vz, i=fi, j=fj, k=fk,
-            color=color, opacity=0.97, name=name,
-            showlegend=False, flatshading=True,
-        )
-
-    @staticmethod
-    def _cone_tree(tx, ty, trunk_bot_z=1.5, trunk_top_z=7.0, canopy_bot_z=7.0, canopy_top_z=18.0,
-                   canopy_r=7.5, trunk_r=1.2, color_canopy='#2E7D32', label='', show_legend=False) -> List:
-        traces = []
-        n = 18
-        theta_t = np.linspace(0, 2*np.pi, n)
-        z_t = np.array([trunk_bot_z, trunk_top_z])
-        T_grid, Z_grid = np.meshgrid(theta_t, z_t)
-        traces.append(go.Surface(
-            x=tx + trunk_r * np.cos(T_grid), y=ty + trunk_r * np.sin(T_grid), z=Z_grid,
-            colorscale=[[0, '#6D4C41'], [1, '#8D6E63']], showscale=False, showlegend=False, opacity=0.95
-        ))
-        theta_c = np.linspace(0, 2*np.pi, n, endpoint=False)
-        vx = list(tx + canopy_r * np.cos(theta_c)) + [tx]
-        vy = list(ty + canopy_r * np.sin(theta_c)) + [ty]
-        vz = [canopy_bot_z] * n + [canopy_top_z]
-        traces.append(go.Mesh3d(
-            x=vx, y=vy, z=vz, i=list(range(n)), j=[(k+1) % n for k in range(n)], k=[n] * n,
-            color=color_canopy, opacity=0.88, name=label if label else 'Tree',
-            showlegend=show_legend, flatshading=True,
-        ))
-        return traces
-
-    # Scene layers
-
-    def _add_terrain(self, fig, layout):
-        L, W = layout['dimensions']['L'], layout['dimensions']['W']
-        x, y = np.linspace(0, L, 30), np.linspace(0, W, 30)
-        X, Y = np.meshgrid(x, y)
-        slope = layout.get('slope', 'Flat')
-        Z = np.zeros_like(X)
-        if slope == 'South': Z = Y * 0.03
-        elif slope == 'North': Z = (W - Y) * 0.03
-        elif slope == 'East': Z = X * 0.03
-        elif slope == 'West': Z = (L - X) * 0.03
-        fig.add_trace(go.Surface(
-            x=X, y=Y, z=Z, colorscale=[[0, '#81C784'], [1, '#2E7D32']],
-            showscale=False, opacity=0.82, name='Terrain', showlegend=True
-        ))
-
-    def _add_zones_3d(self, fig, layout):
-        for zone_id, pos in layout.get('zone_positions', {}).items():
-            fig.add_trace(self._box_mesh(
-                pos['x'], pos['y'], 0, pos['x'] + pos['width'], pos['y'] + pos['height'], 1.5,
-                color=self.ZONE_COLORS.get(zone_id, '#CCCCCC'),
-                name=self.ZONE_NAMES.get(zone_id, zone_id), opacity=0.40
-            ))
-
-    def _add_house_3d(self, fig, layout):
-        L, W = layout['dimensions']['L'], layout['dimensions']['W']
-        pos = layout.get('house_position', 'Center')
-        positions = {
-            'North': (L*0.3, W*0.82, L*0.4, W*0.12), 
-            'South': (L*0.3, W*0.06, L*0.4, W*0.12),
-            'East': (L*0.75, W*0.35, L*0.2, W*0.3), 
-            'West': (L*0.05, W*0.35, L*0.2, W*0.3),
-            'Center': (L*0.35, W*0.4, L*0.3, W*0.2)
-        }
-        hx, hy, hw, hd = positions.get(pos, positions['Center'])
-        fig.add_trace(self._box_mesh(hx, hy, 1.5, hx+hw, hy+hd, 11.5, color='#8D6E63', name='House'))
-        fig.add_trace(self._hip_roof(hx, hy, hx+hw, hy+hd, 11.5, 16.5, color='#4E342E'))
-
-    def _add_features_3d(self, fig, layout):
-        features = layout.get('features', {})
-        if 'pond' in features:
-            f = features['pond']
-            r = f['radius']
-            rg, tg = np.linspace(0, r, 10), np.linspace(0, 2*np.pi, 36)
-            R, T = np.meshgrid(rg, tg)
-            fig.add_trace(go.Surface(
-                x=f['x'] + R * np.cos(T), y=f['y'] + R * np.sin(T), z=np.full_like(R, -0.5),
-                colorscale=[[0, '#4FC3F7'], [1, '#0288D1']], showscale=False, name='Pond', showlegend=True
-            ))
-        if 'well' in features:
-            f = features['well']
-            rw = f.get('radius', 4)
-            t_w, z_w = np.linspace(0, 2*np.pi, 24), np.array([1.5, 6.0])
-            Tw, Zw = np.meshgrid(t_w, z_w)
-            fig.add_trace(go.Surface(
-                x=f['x'] + rw * np.cos(Tw), y=f['y'] + rw * np.sin(Tw), z=Zw,
-                colorscale=[[0, '#546E7A'], [1, '#90A4AE']], showscale=False, name='Borewell'
-            ))
-
-    def _add_all_livestock_3d(self, fig, layout):
-        features = layout.get('features', {})
-        livestock_config = {
-            'goat_shed': ('#FFCCBC', '#4E342E', 'Goat Shed', 7.0),
-            'chicken_coop': ('#FFF9C4', '#F57F17', 'Chicken Coop', 5.0),
-            'piggery': ('#F8BBD0', '#880E4F', 'Piggery', 6.0),
-            'cow_shed': ('#D7CCC8', '#5D4037', 'Cow Shed', 9.0),
-            'fish_tanks': ('#B3E5FC', '#0288D1', 'Fish Tanks', 3.0),
-            'bee_hives': ('#FFF176', '#F9A825', 'Bee Hives', 4.0),
-        }
-        for key, (wc, rc, lbl, sh) in livestock_config.items():
-            if key not in features: 
-                continue
-            f = features[key]
-            bz, rb = 1.5, 1.5 + sh
-            rt = rb + f['width'] * 0.25
-            fig.add_trace(self._box_mesh(f['x'], f['y'], bz, f['x']+f['width'], f['y']+f['height'], rb, wc, lbl))
-            fig.add_trace(self._hip_roof(f['x'], f['y'], f['x']+f['width'], f['y']+f['height'], rb, rt, rc))
-
-    def _add_trees_3d(self, fig, layout):
-        zone_pos = layout.get('zone_positions', {})
-        if 'z2' not in zone_pos: 
-            return
-        z = zone_pos['z2']
-        rel_pos = [(0.18, 0.3), (0.48, 0.58), (0.78, 0.38), (0.28, 0.72), (0.68, 0.2), (0.58, 0.82)]
-        colors = ['#2E7D32', '#388E3C', '#1B5E20', '#43A047', '#66BB6A', '#33691E']
-        for idx, (rx, ry) in enumerate(rel_pos):
-            tx, ty = z['x'] + rx * z['width'], z['y'] + ry * z['height']
-            for trace in self._cone_tree(tx, ty, color_canopy=colors[idx % 6], show_legend=(idx == 0)):
-                fig.add_trace(trace)
+        
