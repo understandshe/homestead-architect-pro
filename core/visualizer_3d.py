@@ -847,3 +847,5 @@ class RealisticVisualizer3D:
             height=800,
             title=f"Realistic 3D View — {self.acres:.1f} acres | Scale: 1 unit = 1 foot",
         )
+st.components.v1.html(html_template, height=800)
+# इसके नीचे कुछ भी नहीं होना चाहिए, न ``` और न ही कोई एक्स्ट्रा सिंबल।
