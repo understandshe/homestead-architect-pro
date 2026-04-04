@@ -1,20 +1,22 @@
+
 """
-Homestead Architect Pro 2026 — v3.1 REALISTIC EDITION
-Fixed imports + Realistic 3D Visualizer Integration
+Homestead Architect Pro 2026 — v3.2 HTML 3D EDITION
+Full-screen HTML renderer with download button
 """
 
 import streamlit as st
 import sys
 import io
 import json
+import base64
 from pathlib import Path
 
-# Path configuration — ensure core is accessible
+# Path configuration
 BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
 sys.path.insert(0, str(BASE_DIR / 'core'))
 
-# Try imports with fallback
+# Core imports
 try:
     from core.user_interview import UserInterview
     from core.layout_engine import LayoutEngine
@@ -25,33 +27,8 @@ try:
     from core.watermark_system import WatermarkEngine
     from core.pdf_generator import PDFGenerator
 except ImportError as e:
-    st.error(f"Core module import error: {e}")
+    st.error(f"Core module error: {e}")
     st.stop()
-
-# 3D Visualizer import with multiple fallbacks
-visualizer_3d = None
-try:
-    # Try realistic visualizer first (new)
-    from realistic_visualizer_3d import RealisticVisualizer3D
-    visualizer_3d = RealisticVisualizer3D
-    VISUALIZER_MODE = "REALISTIC"
-except ImportError:
-    try:
-        # Fallback to core.visualizer_3d (original)
-        from core.visualizer_3d import Visualizer3D
-        visualizer_3d = Visualizer3D
-        VISUALIZER_MODE = "STANDARD"
-    except ImportError:
-        try:
-            # Fallback to visualizer_3d in root
-            from visualizer_3d import Visualizer3D
-            visualizer_3d = Visualizer3D
-            VISUALIZER_MODE = "STANDARD"
-        except ImportError as e:
-            st.error(f"3D Visualizer not found: {e}")
-            st.error("Please ensure visualizer_3d.py or realistic_visualizer_3d.py exists")
-            VISUALIZER_MODE = "NONE"
-            visualizer_3d = None
 
 # Page Configuration
 st.set_page_config(
@@ -69,7 +46,6 @@ st.markdown("""
     font-weight: 800;
     color: #1B5E20;
     text-align: center;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
     margin-bottom: 0.5rem;
 }
 .sub-header {
@@ -77,43 +53,389 @@ st.markdown("""
     color: #555;
     text-align: center;
     margin-bottom: 2rem;
-    font-weight: 400;
-}
-[data-testid="stMetricValue"] {
-    font-size: 2rem !important;
-    font-weight: 700 !important;
-    color: #2E7D32 !important;
-}
-[data-testid="stMetricLabel"] {
-    font-size: 1rem !important;
-    color: #666 !important;
-}
-.stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
-}
-.stTabs [data-baseweb="tab"] {
-    height: 50px;
-    padding-left: 20px;
-    padding-right: 20px;
-    font-weight: 600;
-    font-size: 1.1rem;
 }
 .success-box {
     background: linear-gradient(135deg, #C8E6C9 0%, #A5D6A7 100%);
-    padding: 20px;
-    border-radius: 15px;
+    padding: 15px;
+    border-radius: 10px;
     border-left: 5px solid #2E7D32;
     margin: 10px 0;
 }
-.info-badge {
-    background: #E3F2FD;
-    padding: 10px 15px;
+.download-btn {
+    background: #1976D2;
+    color: white;
+    padding: 12px 24px;
     border-radius: 8px;
-    border-left: 4px solid #1976D2;
-    margin: 5px 0;
+    text-decoration: none;
+    display: inline-block;
+    margin: 10px 5px;
+    font-weight: 600;
+}
+.download-btn:hover {
+    background: #1565C0;
 }
 </style>
 """, unsafe_allow_html=True)
+
+
+def generate_3d_html(layout_data):
+    """Generate full HTML with Three.js for realistic 3D rendering"""
+    
+    if not layout_data or 'dimensions' not in layout_data:
+        return None
+    
+    L = layout_data['dimensions']['L']
+    W = layout_data['dimensions']['W']
+    acres = layout_data.get('acres', round(L * W / 43560, 2))
+    
+    # Extract features
+    features = layout_data.get('features', {})
+    zones = layout_data.get('zone_positions', {})
+    
+    # Generate objects JSON for Three.js
+    objects_json = []
+    
+    # Terrain
+    objects_json.append({
+        'type': 'terrain',
+        'width': L,
+        'depth': W,
+        'color': '#81C784'
+    })
+    
+    # House
+    if 'house_position' in layout_data:
+        house_pos = layout_data['house_position']
+        positions = {
+            'North': {'x': L*0.3, 'z': W*0.75},
+            'South': {'x': L*0.3, 'z': W*0.15},
+            'East': {'x': L*0.7, 'z': W*0.4},
+            'West': {'x': L*0.1, 'z': W*0.4},
+            'Center': {'x': L*0.4, 'z': W*0.4}
+        }
+        pos = positions.get(house_pos, positions['Center'])
+        objects_json.append({
+            'type': 'house',
+            'x': pos['x'],
+            'z': pos['z'],
+            'width': 30,
+            'depth': 40,
+            'height': 12,
+            'color': '#8D6E63',
+            'roofColor': '#4E342E'
+        })
+    
+    # Trees in Zone 2
+    if 'z2' in zones:
+        z2 = zones['z2']
+        tree_positions = [
+            (0.2, 0.3), (0.5, 0.5), (0.8, 0.4),
+            (0.3, 0.7), (0.7, 0.2), (0.6, 0.8)
+        ]
+        colors = ['#2E7D32', '#388E3C', '#1B5E20', '#43A047', '#66BB6A', '#33691E']
+        for i, (rx, rz) in enumerate(tree_positions):
+            tx = z2['x'] + rx * z2['width']
+            tz = z2['y'] + rz * z2['height']
+            objects_json.append({
+                'type': 'tree',
+                'x': tx,
+                'z': tz,
+                'height': 25 + (i % 3) * 10,
+                'color': colors[i % 6]
+            })
+    
+    # Livestock
+    livestock_items = [
+        ('goat_shed', '#FFCCBC', 'Goat Shed'),
+        ('chicken_coop', '#FFF9C4', 'Chicken Coop'),
+        ('piggery', '#F8BBD0', 'Piggery'),
+        ('cow_shed', '#D7CCC8', 'Cow Shed')
+    ]
+    
+    for key, color, name in livestock_items:
+        if key in features:
+            f = features[key]
+            objects_json.append({
+                'type': 'shed',
+                'x': f['x'],
+                'z': f['y'],
+                'width': f['width'],
+                'depth': f['height'],
+                'height': 8,
+                'color': color,
+                'name': name
+            })
+    
+    # Pond
+    if 'pond' in features:
+        f = features['pond']
+        objects_json.append({
+            'type': 'pond',
+            'x': f['x'],
+            'z': f['y'],
+            'radius': f['radius'],
+            'color': '#4FC3F7'
+        })
+    
+    # Well
+    if 'well' in features:
+        f = features['well']
+        objects_json.append({
+            'type': 'well',
+            'x': f['x'],
+            'z': f['y'],
+            'radius': f.get('radius', 4),
+            'color': '#546E7A'
+        })
+    
+    # Solar
+    if 'solar' in features:
+        f = features['solar']
+        objects_json.append({
+            'type': 'solar',
+            'x': f['x'],
+            'z': f['y'],
+            'width': f['width'],
+            'depth': f['height'],
+            'color': '#1565C0'
+        })
+    
+    objects_json_str = json.dumps(objects_json)
+    
+    html_template = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homestead 3D View - {acres:.2f} acres</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {{ margin: 0; overflow: hidden; background: #87CEEB; font-family: Arial, sans-serif; }}
+        #canvas-container {{ width: 100vw; height: 100vh; }}
+        #info {{
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 250px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }}
+        #controls {{
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }}
+        button {{
+            padding: 8px 12px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+        }}
+        button:hover {{ background: #45a049; }}
+        .legend-item {{ display: flex; align-items: center; margin: 3px 0; }}
+        .legend-color {{ width: 15px; height: 15px; margin-right: 8px; border-radius: 3px; }}
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="info">
+        <h3>🏡 Homestead 3D</h3>
+        <p><strong>{acres:.2f} acres</strong></p>
+        <p>{int(L)} × {int(W)} ft</p>
+        <hr style="margin: 10px 0;">
+        <div class="legend-item"><div class="legend-color" style="background:#8D6E63;"></div>House</div>
+        <div class="legend-item"><div class="legend-color" style="background:#2E7D32;"></div>Trees</div>
+        <div class="legend-item"><div class="legend-color" style="background:#4FC3F7;"></div>Pond</div>
+        <div class="legend-item"><div class="legend-color" style="background:#FFCCBC;"></div>Livestock</div>
+        <div class="legend-item"><div class="legend-color" style="background:#1565C0;"></div>Solar</div>
+    </div>
+    <div id="controls">
+        <button onclick="resetCamera()">🏠 Reset View</button>
+        <button onclick="topView()">⬇️ Top View</button>
+        <button onclick="toggleRotation()">🔄 Auto Rotate</button>
+    </div>
+
+    <script>
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 100, 500);
+        
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+        camera.position.set({L*0.8}, {W*0.8}, {max(L,W)*0.5});
+        
+        const renderer = new THREE.WebGLRenderer({{ antialias: true }});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.1;
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(100, 200, 100);
+        dirLight.castShadow = true;
+        dirLight.shadow.camera.left = -200;
+        dirLight.shadow.camera.right = 200;
+        dirLight.shadow.camera.top = 200;
+        dirLight.shadow.camera.bottom = -200;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+        
+        // Ground
+        const groundGeometry = new THREE.PlaneGeometry({L*1.2}, {W*1.2});
+        const groundMaterial = new THREE.MeshLambertMaterial({{ color: 0x90EE90 }});
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+        
+        // Grid
+        const gridHelper = new THREE.GridHelper({max(L,W)}, 20, 0x555555, 0x888888);
+        scene.add(gridHelper);
+        
+        // Objects
+        const objects = {objects_json_str};
+        
+        objects.forEach(obj => {{
+            if (obj.type === 'terrain') {{
+                // Already created ground
+            }} else if (obj.type === 'house') {{
+                // House body
+                const geometry = new THREE.BoxGeometry(obj.width, obj.height, obj.depth);
+                const material = new THREE.MeshLambertMaterial({{ color: obj.color }});
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(obj.x + obj.width/2, obj.height/2, obj.z + obj.depth/2);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                
+                // Roof
+                const roofGeometry = new THREE.ConeGeometry(Math.max(obj.width, obj.depth)*0.7, 8, 4);
+                const roofMaterial = new THREE.MeshLambertMaterial({{ color: obj.roofColor }});
+                const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+                roof.position.set(obj.x + obj.width/2, obj.height + 4, obj.z + obj.depth/2);
+                roof.rotation.y = Math.PI / 4;
+                roof.castShadow = true;
+                scene.add(roof);
+                
+            }} else if (obj.type === 'tree') {{
+                // Trunk
+                const trunkGeo = new THREE.CylinderGeometry(1, 1.5, obj.height*0.3, 8);
+                const trunkMat = new THREE.MeshLambertMaterial({{ color: 0x8D6E63 }});
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.set(obj.x, obj.height*0.15, obj.z);
+                trunk.castShadow = true;
+                scene.add(trunk);
+                
+                // Canopy
+                const canopyGeo = new THREE.SphereGeometry(obj.height*0.25, 16, 16);
+                const canopyMat = new THREE.MeshLambertMaterial({{ color: obj.color }});
+                const canopy = new THREE.Mesh(canopyGeo, canopyMat);
+                canopy.position.set(obj.x, obj.height*0.6, obj.z);
+                canopy.castShadow = true;
+                scene.add(canopy);
+                
+            }} else if (obj.type === 'shed') {{
+                const geometry = new THREE.BoxGeometry(obj.width, obj.height, obj.depth);
+                const material = new THREE.MeshLambertMaterial({{ color: obj.color }});
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(obj.x + obj.width/2, obj.height/2, obj.z + obj.depth/2);
+                mesh.castShadow = true;
+                scene.add(mesh);
+                
+            }} else if (obj.type === 'pond') {{
+                const geometry = new THREE.CircleGeometry(obj.radius, 32);
+                const material = new THREE.MeshLambertMaterial({{ 
+                    color: obj.color, 
+                    transparent: true, 
+                    opacity: 0.8 
+                }});
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.set(obj.x, 0.2, obj.z);
+                scene.add(mesh);
+                
+            }} else if (obj.type === 'well') {{
+                const geometry = new THREE.CylinderGeometry(obj.radius, obj.radius, 6, 16);
+                const material = new THREE.MeshLambertMaterial({{ color: obj.color }});
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(obj.x, 3, obj.z);
+                mesh.castShadow = true;
+                scene.add(mesh);
+                
+            }} else if (obj.type === 'solar') {{
+                const geometry = new THREE.BoxGeometry(obj.width, 1, obj.depth);
+                const material = new THREE.MeshLambertMaterial({{ color: obj.color }});
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(obj.x + obj.width/2, 4, obj.z + obj.depth/2);
+                mesh.rotation.x = -0.2;
+                mesh.castShadow = true;
+                scene.add(mesh);
+            }}
+        }});
+        
+        let autoRotate = false;
+        
+        function animate() {{
+            requestAnimationFrame(animate);
+            if (autoRotate) {{
+                controls.autoRotate = true;
+            }} else {{
+                controls.autoRotate = false;
+            }}
+            controls.update();
+            renderer.render(scene, camera);
+        }}
+        
+        function resetCamera() {{
+            camera.position.set({L*0.8}, {W*0.8}, {max(L,W)*0.5});
+            controls.target.set({L/2}, 0, {W/2});
+        }}
+        
+        function topView() {{
+            camera.position.set({L/2}, {max(L,W)*1.2}, {W/2});
+            controls.target.set({L/2}, 0, {W/2});
+        }}
+        
+        function toggleRotation() {{
+            autoRotate = !autoRotate;
+        }}
+        
+        // Handle resize
+        window.addEventListener('resize', () => {{
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }});
+        
+        animate();
+    </script>
+</body>
+</html>
+"""
+    return html_template
 
 
 def main():
@@ -124,43 +446,13 @@ def main():
     # Sidebar
     with st.sidebar:
         st.title('⚙️ Configuration')
-        
-        watermark_enabled = st.checkbox(
-            '☑️ Enable Watermark (chundalgardens.com)', 
-            value=True,
-            help="Adds watermark to protect your designs"
-        )
-        
-        # Visualizer mode indicator
-        if VISUALIZER_MODE == "REALISTIC":
-            st.success("🎨 3D Mode: REALISTIC (Real-world scale)")
-        elif VISUALIZER_MODE == "STANDARD":
-            st.info("🎨 3D Mode: STANDARD")
-        else:
-            st.warning("🎨 3D Mode: NOT AVAILABLE")
-        
-        st.divider()
-        
-        st.markdown("### 📊 Quick Stats")
-        if 'layout_data' in st.session_state:
-            ld = st.session_state['layout_data']
-            st.metric("Area", f"{ld.get('acres', 0):.2f} acres")
-            st.metric("Category", ld.get('category', 'N/A'))
-        else:
-            st.info("Generate a design to see stats")
-        
+        watermark_enabled = st.checkbox('☑️ Enable Watermark', value=True)
         st.divider()
         st.markdown("**Made by: Chundal Gardens**")
-        st.markdown("🌐 [chundalgardens.com](https://chundalgardens.com)")
+        st.markdown("🌐 chundalgardens.com")
     
     # Tabs
-    tabs = st.tabs([
-        '🎨 Design Studio', 
-        '🌐 Realistic 3D View', 
-        '🐑 Livestock Designer', 
-        '💰 Cost Calculator', 
-        '📥 Export & Download'
-    ])
+    tabs = st.tabs(['🎨 Design Studio', '🌐 Realistic 3D View', '🐑 Livestock', '💰 Costs', '📥 Export'])
     
     with tabs[0]: 
         design_tab(watermark_enabled)
@@ -175,307 +467,123 @@ def main():
 
 
 def design_tab(watermark_enabled):
-    """Design tab with 2D visualization"""
+    """Design tab"""
     st.header('🎨 Smart Homestead Designer')
     
     interview = UserInterview()
     answers = interview.run()
     
     if not answers:
-        st.info("👆 Fill out the interview questions above to generate your design")
         return
     
-    st.markdown('<div class="success-box">✅ Generating your custom homestead design...</div>', 
-                unsafe_allow_html=True)
+    st.markdown('<div class="success-box">✅ Generating your custom design...</div>', unsafe_allow_html=True)
     
     col1, col2 = st.columns([3, 2])
     
     with col1:
-        with st.spinner('🎨 Rendering professional site plan...'):
-            try:
-                engine = LayoutEngine()
-                layout = engine.generate(answers)
-                
-                viz = Visualizer2D()
-                raw_map = viz.create(layout, answers)
-                
-                # Save raw for PDF
-                raw_map.seek(0)
-                st.session_state['raw_map'] = io.BytesIO(raw_map.read())
-                
-                raw_map.seek(0)
-                if watermark_enabled:
-                    display_map = WatermarkEngine.apply_visible_watermark(raw_map)
-                else:
-                    display_map = WatermarkEngine.apply_protection_watermark(raw_map)
-                
-                st.image(display_map, use_column_width=True, caption="2D Site Plan")
-                st.session_state['current_map'] = display_map
-                st.session_state['layout_data'] = layout
-                st.session_state['answers'] = answers
-                
-            except Exception as e:
-                st.error(f"Design generation error: {e}")
-                st.exception(e)
+        with st.spinner('Rendering...'):
+            engine = LayoutEngine()
+            layout = engine.generate(answers)
+            
+            viz = Visualizer2D()
+            raw_map = viz.create(layout, answers)
+            
+            raw_map.seek(0)
+            st.session_state['raw_map'] = io.BytesIO(raw_map.read())
+            
+            raw_map.seek(0)
+            if watermark_enabled:
+                display_map = WatermarkEngine.apply_visible_watermark(raw_map)
+            else:
+                display_map = WatermarkEngine.apply_protection_watermark(raw_map)
+            
+            st.image(display_map, use_column_width=True)
+            st.session_state['current_map'] = display_map
+            st.session_state['layout_data'] = layout
+            st.session_state['answers'] = answers
     
     with col2:
         if 'layout_data' in st.session_state:
             ld = st.session_state['layout_data']
-            
-            st.subheader("📐 Site Metrics")
-            m1, m2 = st.columns(2)
-            with m1:
-                st.metric('Total Area', f"{ld.get('total_sqft', 0):,} sq.ft.")
-                st.metric('Acres', f"{ld.get('acres', 0):.2f}")
-            with m2:
-                st.metric('Dimensions', f"{int(ld.get('dimensions', {}).get('L', 0))} × {int(ld.get('dimensions', {}).get('W', 0))} ft")
-                st.metric('Category', ld.get('category', 'N/A').title())
-            
-            # Livestock info
-            lv = [x for x in ld.get('livestock', []) if x and x != 'None']
-            if lv:
-                st.markdown('<div class="info-badge">🐾 Animals: ' + ', '.join(lv) + '</div>', 
-                          unsafe_allow_html=True)
-            
-            # Climate info
-            if answers.get('location'):
-                try:
-                    climate = ClimateEngine().get_data(answers['location'])
-                    st.markdown(f'<div class="info-badge">⛅ Climate Zone: <b>{climate.get("zone", "Unknown")}</b></div>', 
-                              unsafe_allow_html=True)
-                except:
-                    pass
-            
-            st.info("💡 Tip: Switch to 'Realistic 3D View' tab to see your design in 3D!")
+            st.metric('Area', f"{ld.get('acres', 0):.2f} acres")
+            st.metric('Size', f"{int(ld.get('dimensions', {}).get('L', 0))} × {int(ld.get('dimensions', {}).get('W', 0))} ft")
 
 
 def view_3d_tab():
-    """3D visualization tab with realistic rendering"""
+    """3D view with HTML renderer and download button"""
     st.header('🌐 Realistic 3D Cinematic View')
     
-    if visualizer_3d is None:
-        st.error("❌ 3D Visualizer not available. Please check installation.")
-        st.info("Expected files: realistic_visualizer_3d.py or core/visualizer_3d.py")
-        return
-    
     if 'layout_data' not in st.session_state:
-        st.warning("👈 Please generate a design in the 'Design Studio' tab first!")
-        
-        # Show empty state with demo
-        with st.expander("ℹ️ What you'll see here"):
-            st.markdown("""
-            **Features of Realistic 3D View:**
-            - 🏠 **Real-world scale**: 1 unit = 1 foot
-            - 🌳 **Botanically accurate trees** with proper heights
-            - 🐄 **Real barn dimensions** (no oversized sheds)
-            - 📐 **Dynamic scaling**: Works for 1-1000 acres
-            - 🎥 **Multiple camera angles**: Isometric, Top, North, South, etc.
-            - 💧 **Realistic water features** with depth
-            """)
-        
-        # Try to show empty visualizer
-        try:
-            viz = visualizer_3d()
-            viz.create({})
-        except:
-            pass
+        st.warning('👈 Generate a design in Design Studio tab first!')
         return
     
-    # Real 3D rendering
     layout_data = st.session_state['layout_data']
-    
-    # Info banner
     acres = layout_data.get('acres', 0)
-    st.markdown(f'<div class="success-box">🎯 Rendering {acres:.2f} acres in REALISTIC 3D | Scale: 1 unit = 1 foot</div>', 
-                unsafe_allow_html=True)
     
-    with st.container():
-        with st.spinner('🎬 Generating cinematic 3D view...'):
-            try:
-                viz = visualizer_3d()
-                
-                # Check if it's realistic visualizer (has user_models param)
-                import inspect
-                sig = inspect.signature(viz.create)
-                if 'user_models' in sig.parameters:
-                    # Realistic visualizer
-                    user_models = st.session_state.get('user_models', [])
-                    viz.create(layout_data, user_models=user_models)
-                else:
-                    # Standard visualizer
-                    viz.create(layout_data)
-                    
-            except Exception as e:
-                st.error(f"3D rendering error: {e}")
-                st.exception(e)
-                st.info("💡 Try refreshing or check the layout data")
+    st.markdown(f'<div class="success-box">🎯 Rendering {acres:.2f} acres in REALISTIC 3D | Full HTML Engine</div>', unsafe_allow_html=True)
+    
+    # Generate HTML
+    html_content = generate_3d_html(layout_data)
+    
+    if html_content:
+        # Download button for HTML
+        b64 = base64.b64encode(html_content.encode()).decode()
+        href = f'<a href="data:text/html;base64,{b64}" download="homestead_3d_{acres:.1f}acres.html" class="download-btn">📥 Download 3D HTML File</a>'
+        st.markdown(href, unsafe_allow_html=True)
+        
+        st.info("💡 Tip: Download the HTML file to view in full screen on any device!")
+        
+        # Render 3D
+        st.components.v1.html(html_content, height=800, scrolling=False)
+    else:
+        st.error("Failed to generate 3D view")
 
 
 def livestock_tab():
-    """Livestock housing designer"""
-    st.header('🐑 Professional Livestock Housing Designer')
-    
+    """Livestock tab"""
+    st.header('🐑 Livestock Housing Designer')
     designer = LivestockDesigner()
     
     col1, col2 = st.columns(2)
     with col1:
-        animal = st.selectbox(
-            '🐾 Animal Type',
-            ['Goats', 'Chickens', 'Pigs', 'Cows', 'Sheep', 'Rabbits'],
-            help="Select animal for housing design"
-        )
-        count = st.number_input('📊 Total Count', 1, 1000, 10, 
-                               help="Number of animals to house")
+        animal = st.selectbox('Animal', ['Goats', 'Chickens', 'Pigs', 'Cows'])
+        count = st.number_input('Count', 1, 1000, 10)
     with col2:
-        climate = st.selectbox(
-            '🌍 Regional Climate',
-            ['Tropical', 'Dry/Arid', 'Temperate', 'Cold', 'Highland'],
-            help="Climate affects ventilation and insulation"
-        )
-        budget = st.selectbox(
-            '💰 Project Budget',
-            ['Basic/Economy', 'Standard', 'Premium', 'Luxury'],
-            help="Budget level determines materials"
-        )
+        climate = st.selectbox('Climate', ['Tropical', 'Dry', 'Temperate', 'Cold'])
+        budget = st.selectbox('Budget', ['Basic', 'Standard', 'Premium'])
     
-    if st.button('🏗️ Generate Housing Plan', use_container_width=True, type='primary'):
-        with st.spinner('🔨 Designing optimal housing...'):
-            try:
-                design = designer.create_housing(animal, count, climate, budget)
-                
-                if 'floor_plan' in design:
-                    st.image(design['floor_plan'], use_column_width=True, 
-                            caption=f"{animal} Housing Floor Plan")
-                
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.subheader('📋 Specifications')
-                    for k, v in design.get('specs', {}).items():
-                        st.write(f'**{k}:** {v}')
-                with c2:
-                    st.subheader('🔧 Materials List')
-                    for k, v in design.get('materials', {}).items():
-                        st.write(f'**{k}:** {v}')
-                
-                cost = design.get('estimated_cost', 'N/A')
-                st.success(f"💵 Estimated Investment: **{cost}**")
-                
-            except Exception as e:
-                st.error(f'Design error: {e}')
-                st.exception(e)
+    if st.button('Generate Housing Plan', use_container_width=True):
+        with st.spinner('Designing...'):
+            design = designer.create_housing(animal, count, climate, budget)
+            st.image(design['floor_plan'], use_column_width=True)
+            st.write(design['specs'])
 
 
 def costs_tab():
-    """Cost estimation tab"""
+    """Costs tab"""
     st.header('💰 Global Investment Calculator')
-    
     calc = CostCalculator()
     
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        country = st.selectbox(
-            '🌍 Country',
-            ['USA', 'India', 'UK', 'Canada', 'Australia', 'Germany', 'France', 'Brazil']
-        )
-    with c2:
-        currency = st.selectbox(
-            '💱 Currency',
-            ['USD', 'INR', 'EUR', 'GBP', 'CAD', 'AUD', 'BRL']
-        )
-    with c3:
-        size = st.selectbox(
-            '📐 Farm Size',
-            ['Small (< 0.5 acre)', 'Medium (0.5-5 acres)', 'Large (5-20 acres)', 'Estate (20+ acres)']
-        )
+    country = st.selectbox('Country', ['USA', 'India', 'UK', 'Canada'])
+    currency = st.selectbox('Currency', ['USD', 'INR', 'EUR', 'GBP'])
+    size = st.selectbox('Farm Size', ['Small', 'Medium', 'Large'])
     
-    if st.button('💵 Calculate Investment', use_container_width=True, type='primary'):
-        with st.spinner('💰 Analyzing costs...'):
-            try:
-                costs = calc.estimate(country, currency, size)
-                
-                c1, c2, c3, c4 = st.columns(4)
-                with c1:
-                    st.metric('Minimum Setup', costs.get('setup_min', 'N/A'))
-                with c2:
-                    st.metric('Maximum Setup', costs.get('setup_max', 'N/A'))
-                with c3:
-                    st.metric('Annual Operating', costs.get('annual_operating', 'N/A'))
-                with c4:
-                    st.metric('ROI Period', f"{costs.get('roi_years', 'N/A')} years")
-                
-                # Breakdown
-                if 'breakdown' in costs:
-                    with st.expander("📊 Detailed Breakdown"):
-                        for category, amount in costs['breakdown'].items():
-                            st.write(f"**{category}:** {amount}")
-                            
-            except Exception as e:
-                st.error(f'Calculation error: {e}')
+    if st.button('Calculate Investment'):
+        costs = calc.estimate(country, currency, size)
+        st.metric('Setup Cost', costs['setup_min'])
 
 
 def download_tab(watermark_enabled):
-    """Export and download tab"""
-    st.header('📥 Export Your Professional Plan')
+    """Download tab"""
+    st.header('📥 Export Your Plan')
     
     if 'current_map' not in st.session_state:
-        st.warning('⚠️ Please generate a design in the Design Studio tab first.')
+        st.warning('Generate a design first!')
         return
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader('🗺️ Site Map (PNG)')
-        buf = st.session_state['current_map']
-        buf.seek(0)
-        st.download_button(
-            '⬇️ Download Site Map (PNG)',
-            data=buf,
-            file_name='homestead_site_plan.png',
-            mime='image/png',
-            use_container_width=True,
-            help="High-resolution 2D site plan"
-        )
-    
-    with col2:
-        st.subheader('📄 Professional PDF Report')
-        
-        include_3d = st.checkbox('Include 3D view in PDF', value=True)
-        
-        if st.button('📑 Generate PDF Report', use_container_width=True, type='primary'):
-            with st.spinner('📄 Creating comprehensive PDF report...'):
-                try:
-                    pdf_gen = PDFGenerator()
-                    
-                    # Get buffers
-                    raw = st.session_state.get('raw_map')
-                    if raw:
-                        raw.seek(0)
-                    
-                    # Try to get 3D snapshot if available
-                    three_d_buf = None
-                    if include_3d and 'layout_data' in st.session_state:
-                        # Note: 3D to image conversion would need additional setup
-                        pass
-                    
-                    pdf_buf = pdf_gen.create(
-                        layout_data=st.session_state['layout_data'],
-                        watermark_enabled=watermark_enabled,
-                        map_image_buffer=raw,
-                        threed_image_buffer=three_d_buf
-                    )
-                    
-                    st.success('✅ Professional PDF Report Ready!')
-                    st.download_button(
-                        '⬇️ Download PDF Report',
-                        data=pdf_buf,
-                        file_name=f"homestead_plan_{st.session_state.get('answers', {}).get('name', 'design')}.pdf",
-                        mime='application/pdf',
-                        use_container_width=True
-                    )
-                    
-                except Exception as e:
-                    st.error(f'PDF generation error: {e}')
-                    st.exception(e)
+    buf = st.session_state['current_map']
+    buf.seek(0)
+    st.download_button('Download Site Map (PNG)', data=buf, file_name='homestead_plan.png', mime='image/png')
 
 
 if __name__ == '__main__':
