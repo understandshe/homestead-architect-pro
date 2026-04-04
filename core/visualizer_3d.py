@@ -1,5 +1,5 @@
 """
-Homestead Architect Pro 2026 â€” ULTRA EDITION
+Homestead Architect Pro 2026 - ULTRA EDITION
 Features: 3D Labels, HTML Download, Toggle HUD/Data.
 """
 
@@ -19,22 +19,22 @@ class Visualizer3D:
         'z4': '#DDA0DD',
     }
     ZONE_NAMES = {
-        'z0': 'Zone 0 â€“ Residential',
-        'z1': 'Zone 1 â€“ Kitchen Garden',
-        'z2': 'Zone 2 â€“ Food Forest',
-        'z3': 'Zone 3 â€“ Pasture / Crops',
-        'z4': 'Zone 4 â€“ Buffer Zone',
+        'z0': 'Zone 0 - Residential',
+        'z1': 'Zone 1 - Kitchen Garden',
+        'z2': 'Zone 2 - Food Forest',
+        'z3': 'Zone 3 - Pasture / Crops',
+        'z4': 'Zone 4 - Buffer Zone',
     }
 
     def create(self, layout: Dict[str, Any]):
         """Main entry point for Streamlit to render the 3D map."""
         if not layout or 'dimensions' not in layout:
-            st.info("ðŸ‘ˆ à¤ªà¤¹à¤²à¥‡ 'Design' à¤Ÿà¥ˆà¤¬ à¤®à¥‡à¤‚ à¤…à¤ªà¤¨à¤¾ à¤¨à¤•à¥à¤¶à¤¾ à¤œà¤¨à¤°à¥‡à¤Ÿ à¤•à¤°à¥‡à¤‚à¥¤")
+            st.info("Please generate a design in the Design tab first.")
             return
 
         fig = go.Figure()
 
-        # à¤ªà¤°à¤¤à¥‹à¤‚ (Layers) à¤•à¥‹ à¤œà¥‹à¤¡à¤¼à¤¨à¤¾ - à¤ªà¥à¤°à¤¾à¤¨à¥‡ à¤«à¤‚à¤•à¥à¤¶à¤¨
+        # Add layers
         self._add_terrain(fig, layout)
         self._add_zones_3d(fig, layout)
         self._add_house_3d(fig, layout)
@@ -42,7 +42,7 @@ class Visualizer3D:
         self._add_all_livestock_3d(fig, layout)
         self._add_trees_3d(fig, layout)
         
-        # à¤¨à¤¯à¤¾ à¤«à¥€à¤šà¤°: 3D à¤²à¥‡à¤¬à¤²à¥à¤¸ (à¤®à¥‰à¤¡à¤²à¥à¤¸ à¤•à¥‡ à¤Šà¤ªà¤° à¤¨à¤¾à¤®)
+        # Feature: 3D Labels (names above models)
         self._add_3d_labels(fig, layout)
 
         L = layout['dimensions']['L']
@@ -52,11 +52,11 @@ class Visualizer3D:
 
         fig.update_layout(
             title=dict(
-                text=f"ðŸ¡ {loc_name} â€” {acres:.2f} acres ({int(L)} Ã— {int(W)} ft)",
+                text=f"Homestead: {loc_name} - {acres:.2f} acres ({int(L)} x {int(W)} ft)",
                 font=dict(size=17, color='#2E7D32', family='Arial'),
                 x=0.5,
             ),
-            # à¤¨à¤¯à¤¾ à¤«à¥€à¤šà¤°: HUD/Title à¤›à¥à¤ªà¤¾à¤¨à¥‡ à¤•à¥‡ à¤²à¤¿à¤ à¤¬à¤Ÿà¤¨
+            # Feature: HUD/Title toggle buttons
             updatemenus=[
                 dict(
                     type="buttons",
@@ -66,12 +66,12 @@ class Visualizer3D:
                     showactive=True,
                     buttons=[
                         dict(
-                            label="ðŸ“Š Show Info",
+                            label="Show Info",
                             method="relayout",
-                            args=[{"title.text": f"ðŸ¡ {loc_name} â€” {acres:.2f} acres"}]
+                            args=[{"title.text": f"Homestead: {loc_name} - {acres:.2f} acres"}]
                         ),
                         dict(
-                            label="ðŸš« Hide Info",
+                            label="Hide Info",
                             method="relayout",
                             args=[{"title.text": ""}]
                         )
@@ -99,45 +99,53 @@ class Visualizer3D:
             height=700,
         )
         
-        # 1. Plotly à¤šà¤¾à¤°à¥à¤Ÿ à¤¦à¤¿à¤–à¤¾à¤¨à¤¾
+        # 1. Display Plotly chart
         st.plotly_chart(fig, use_container_width=True)
         
-        # 2. à¤¨à¤¯à¤¾ à¤«à¥€à¤šà¤°: HTML à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡ à¤¬à¤Ÿà¤¨
+        # 2. Feature: HTML Download Button
         try:
             html_bytes = fig.to_html(include_plotlyjs='cdn', full_html=True)
             st.download_button(
-                label="ðŸ“¥ Download 3D Map (HTML)",
+                label="Download 3D Map (HTML)",
                 data=html_bytes,
                 file_name=f"homestead_3d_{loc_name.replace(' ', '_')}.html",
                 mime="text/html",
                 use_container_width=True
             )
-        except Exception:
-            pass
+        except Exception as e:
+            st.error(f"HTML export failed: {e}")
 
     def _add_3d_labels(self, fig, layout):
-        """à¤®à¥‰à¤¡à¤²à¥à¤¸ à¤•à¥‡ à¤Šà¤ªà¤° à¤Ÿà¥‡à¤•à¥à¤¸à¥à¤Ÿ à¤²à¥‡à¤¬à¤²à¥à¤¸ à¤œà¥‹à¥œà¤¨à¤¾à¥¤"""
+        """Add text labels above models."""
         features = layout.get('features', {})
         L, W = layout['dimensions']['L'], layout['dimensions']['W']
         label_data = []
 
-        # à¤˜à¤° à¤•à¤¾ à¤²à¥‡à¤¬à¤²
+        # House label
         h_pos = layout.get('house_position', 'Center')
         hx, hy = L*0.5, W*0.5
         if h_pos == 'North': hy = W*0.85
         elif h_pos == 'South': hy = W*0.1
-        label_data.append({'x': hx, 'y': hy, 'z': 22, 'text': 'ðŸ  Main House'})
+        label_data.append({'x': hx, 'y': hy, 'z': 22, 'text': 'Main House'})
 
-        # à¤œà¤¾à¤¨à¤µà¤°à¥‹à¤‚ à¤•à¥‡ à¤¶à¥‡à¤¡
+        # Livestock sheds
         livestock_map = {
-            'goat_shed': 'ðŸ Goat Shed', 'chicken_coop': 'ðŸ” Chicken Coop',
-            'piggery': 'ðŸ· Piggery', 'cow_shed': 'ðŸ„ Cow Shed',
-            'fish_tanks': 'ðŸŸ Fish Pond', 'bee_hives': 'ðŸ Bee Hives'
+            'goat_shed': 'Goat Shed', 
+            'chicken_coop': 'Chicken Coop',
+            'piggery': 'Piggery', 
+            'cow_shed': 'Cow Shed',
+            'fish_tanks': 'Fish Pond', 
+            'bee_hives': 'Bee Hives'
         }
         for key, text in livestock_map.items():
             if key in features:
                 f = features[key]
-                label_data.append({'x': f['x']+f['width']/2, 'y': f['y']+f['height']/2, 'z': 15, 'text': text})
+                label_data.append({
+                    'x': f['x']+f['width']/2, 
+                    'y': f['y']+f['height']/2, 
+                    'z': 15, 
+                    'text': text
+                })
 
         fig.add_trace(go.Scatter3d(
             x=[d['x'] for d in label_data],
@@ -150,7 +158,7 @@ class Visualizer3D:
             showlegend=False
         ))
 
-    # â”€â”€ Geometry primitives (à¤ªà¥à¤°à¤¾à¤¨à¥‡ à¤«à¤‚à¤•à¥à¤¶à¤¨ - à¤¬à¤¿à¤¨à¤¾ à¤¬à¤¦à¤²à¤¾à¤µ à¤•à¥‡) â”€â”€
+    # Geometry primitives
 
     @staticmethod
     def _box_mesh(x0, y0, z0, x1, y1, z1, color, name,
@@ -204,7 +212,7 @@ class Visualizer3D:
         ))
         return traces
 
-    # â”€â”€ Scene layers (à¤ªà¥à¤°à¤¾à¤¨à¥‡ à¤«à¤‚à¤•à¥à¤¶à¤¨) â”€â”€
+    # Scene layers
 
     def _add_terrain(self, fig, layout):
         L, W = layout['dimensions']['L'], layout['dimensions']['W']
@@ -233,8 +241,10 @@ class Visualizer3D:
         L, W = layout['dimensions']['L'], layout['dimensions']['W']
         pos = layout.get('house_position', 'Center')
         positions = {
-            'North': (L*0.3, W*0.82, L*0.4, W*0.12), 'South': (L*0.3, W*0.06, L*0.4, W*0.12),
-            'East': (L*0.75, W*0.35, L*0.2, W*0.3), 'West': (L*0.05, W*0.35, L*0.2, W*0.3),
+            'North': (L*0.3, W*0.82, L*0.4, W*0.12), 
+            'South': (L*0.3, W*0.06, L*0.4, W*0.12),
+            'East': (L*0.75, W*0.35, L*0.2, W*0.3), 
+            'West': (L*0.05, W*0.35, L*0.2, W*0.3),
             'Center': (L*0.35, W*0.4, L*0.3, W*0.2)
         }
         hx, hy, hw, hd = positions.get(pos, positions['Center'])
@@ -244,7 +254,8 @@ class Visualizer3D:
     def _add_features_3d(self, fig, layout):
         features = layout.get('features', {})
         if 'pond' in features:
-            f = features['pond']; r = f['radius']
+            f = features['pond']
+            r = f['radius']
             rg, tg = np.linspace(0, r, 10), np.linspace(0, 2*np.pi, 36)
             R, T = np.meshgrid(rg, tg)
             fig.add_trace(go.Surface(
@@ -252,7 +263,8 @@ class Visualizer3D:
                 colorscale=[[0, '#4FC3F7'], [1, '#0288D1']], showscale=False, name='Pond', showlegend=True
             ))
         if 'well' in features:
-            f = features['well']; rw = f.get('radius', 4)
+            f = features['well']
+            rw = f.get('radius', 4)
             t_w, z_w = np.linspace(0, 2*np.pi, 24), np.array([1.5, 6.0])
             Tw, Zw = np.meshgrid(t_w, z_w)
             fig.add_trace(go.Surface(
@@ -271,15 +283,18 @@ class Visualizer3D:
             'bee_hives': ('#FFF176', '#F9A825', 'Bee Hives', 4.0),
         }
         for key, (wc, rc, lbl, sh) in livestock_config.items():
-            if key not in features: continue
-            f = features[key]; bz, rb = 1.5, 1.5 + sh
+            if key not in features: 
+                continue
+            f = features[key]
+            bz, rb = 1.5, 1.5 + sh
             rt = rb + f['width'] * 0.25
             fig.add_trace(self._box_mesh(f['x'], f['y'], bz, f['x']+f['width'], f['y']+f['height'], rb, wc, lbl))
             fig.add_trace(self._hip_roof(f['x'], f['y'], f['x']+f['width'], f['y']+f['height'], rb, rt, rc))
 
     def _add_trees_3d(self, fig, layout):
         zone_pos = layout.get('zone_positions', {})
-        if 'z2' not in zone_pos: return
+        if 'z2' not in zone_pos: 
+            return
         z = zone_pos['z2']
         rel_pos = [(0.18, 0.3), (0.48, 0.58), (0.78, 0.38), (0.28, 0.72), (0.68, 0.2), (0.58, 0.82)]
         colors = ['#2E7D32', '#388E3C', '#1B5E20', '#43A047', '#66BB6A', '#33691E']
