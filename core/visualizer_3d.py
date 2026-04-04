@@ -402,4 +402,3 @@ window.addEventListener('load',()=>setTimeout(generateMap,300));
 </html>
         """
         st.components.v1.html(html_template, height=800)
-```
