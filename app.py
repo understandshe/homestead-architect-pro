@@ -1,10 +1,11 @@
 """
-Homestead Architect Pro 2026 — v3 FINAL (Optimized for Three.js)
+Homestead Architect Pro 2026 — v3 FINAL (Optimized for Plotly 3D)
 Cleaned & Integrated for smooth mobile/web experience.
 """
 
 import streamlit as st
 import sys, io
+import json
 from pathlib import Path
 
 # Path configuration
@@ -32,6 +33,7 @@ st.markdown("""
 <style>
 .main-header{font-size:2.4rem;font-weight:bold;color:#2E7D32;text-align:center;}
 .sub-header{font-size:1.05rem;color:#666;text-align:center;margin-bottom:1rem;}
+[data-testid="stMetricValue"] {font-size: 1.8rem;}
 </style>""", unsafe_allow_html=True)
 
 def main():
@@ -105,18 +107,19 @@ def design_tab(watermark_enabled):
 
 def view_3d_tab():
     st.header('🌐 Interactive 3D Cinematic View')
+    
     if 'layout_data' not in st.session_state:
-        st.info('👈 Please generate a design in the Design tab first.')
+        st.info('👈 Please generate a design in the Design tab first to see it in 3D.')
+        # Default empty call to show the tool even without data
+        viz3d = Visualizer3D()
+        viz3d.create({}) 
         return
 
-    # NEW 3D RENDERING LOGIC (Three.js Based)
+    # Pass the generated layout data to the 3D Engine
     with st.container():
-        with st.spinner('Loading 3D Realistic Engine...'):
-            viz3d = Visualizer3D()
-            # This calls the Three.js HTML we created
-            viz3d.create(st.session_state['layout_data'])
-
-    st.caption('Cinematic View Active • Use mouse/touch to rotate manually')
+        viz3d = Visualizer3D()
+        # This will render your complex Plotly HTML with sidebar and layers
+        viz3d.create(st.session_state['layout_data'])
 
 def livestock_tab():
     st.header('🐑 Livestock Housing Designer')
@@ -200,7 +203,7 @@ def download_tab(watermark_enabled):
                         layout_data=st.session_state['layout_data'],
                         watermark_enabled=watermark_enabled,
                         map_image_buffer=raw,
-                        threed_image_buffer=None # Skip 3D capture to avoid kaleido errors
+                        threed_image_buffer=None 
                     )
                     st.success('✅ PDF Ready for download!')
                     st.download_button(
