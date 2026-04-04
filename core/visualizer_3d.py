@@ -24,12 +24,14 @@ class Visualizer3D:
         self._add_zones_3d(fig, layout)
         self._add_house_3d(fig, layout)
         self._add_features_3d(fig, layout)
+        self._add_all_livestock_3d(fig, layout)
         self._add_trees_3d(fig, layout)
+        self._add_paths(fig, layout)
 
         fig.update_layout(
             scene=dict(
-                bgcolor='#D0E8F5',
                 aspectmode='data',
+                bgcolor='#D0E8F5',
                 camera=dict(
                     eye=dict(x=1.8, y=-1.8, z=1.2)
                 )
@@ -62,13 +64,11 @@ class Visualizer3D:
         elif slope == 'East': Z += X * 0.05
         elif slope == 'West': Z += (L - X) * 0.05
 
-        self.X = X
-        self.Y = Y
-        self.Z = Z
+        self.X, self.Y, self.Z = X, Y, Z
 
         fig.add_trace(go.Surface(
             x=X, y=Y, z=Z,
-            colorscale=[[0, '#81C784'], [1, '#2E7D32']],
+            colorscale='Greens',
             showscale=False,
             opacity=0.95
         ))
@@ -81,13 +81,12 @@ class Visualizer3D:
     # ================= ZONES =================
     def _add_zones_3d(self, fig, layout):
         for zone_id, pos in layout.get('zone_positions', {}).items():
-
-            z_base = self._get_height(pos['x'], pos['y'])
+            base = self._get_height(pos['x'], pos['y'])
 
             fig.add_trace(go.Mesh3d(
                 x=[pos['x'], pos['x']+pos['width'], pos['x']+pos['width'], pos['x']],
                 y=[pos['y'], pos['y'], pos['y']+pos['height'], pos['y']+pos['height']],
-                z=[z_base+1.5]*4,
+                z=[base+1.5]*4,
                 color=self.ZONE_COLORS.get(zone_id, '#CCCCCC'),
                 opacity=0.3
             ))
@@ -96,22 +95,29 @@ class Visualizer3D:
     def _add_house_3d(self, fig, layout):
         L, W = layout['dimensions']['L'], layout['dimensions']['W']
 
-        hx, hy = L*0.4, W*0.4
-        hw, hd = L*0.2, W*0.2
+        pos = layout.get('house_position', 'Center')
 
-        base_z = self._get_height(hx, hy)
+        if pos == 'North':
+            hx, hy = L*0.3, W*0.82
+        elif pos == 'South':
+            hx, hy = L*0.3, W*0.06
+        else:
+            hx, hy = L*0.4, W*0.4
+
+        hw, hd = L*0.2, W*0.2
+        base = self._get_height(hx, hy)
 
         fig.add_trace(go.Mesh3d(
             x=[hx, hx+hw, hx+hw, hx, hx, hx+hw, hx+hw, hx],
             y=[hy, hy, hy+hd, hy+hd, hy, hy, hy+hd, hy+hd],
-            z=[base_z,base_z,base_z,base_z, base_z+14,base_z+14,base_z+14,base_z+14],
+            z=[base,base,base,base, base+14,base+14,base+14,base+14],
             color='#8D6E63'
         ))
 
         fig.add_trace(go.Mesh3d(
             x=[hx, hx+hw, hx+hw, hx, hx+hw/2],
             y=[hy, hy, hy+hd, hy+hd, hy+hd/2],
-            z=[base_z+14,base_z+14,base_z+14,base_z+14,base_z+20],
+            z=[base+14,base+14,base+14,base+14,base+20],
             color='#4E342E'
         ))
 
@@ -119,12 +125,28 @@ class Visualizer3D:
     def _add_features_3d(self, fig, layout):
         features = layout.get('features', {})
 
+        if 'pond' in features:
+            f = features['pond']
+            base = self._get_height(f['x'], f['y'])
+
+            r = f['radius']
+            theta = np.linspace(0, 2*np.pi, 40)
+            R, T = np.meshgrid(np.linspace(0, r, 10), theta)
+
+            fig.add_trace(go.Surface(
+                x=f['x'] + R*np.cos(T),
+                y=f['y'] + R*np.sin(T),
+                z=np.full_like(R, base-1),
+                colorscale='Blues',
+                showscale=False
+            ))
+
         if 'well' in features:
             f = features['well']
-            base_z = self._get_height(f['x'], f['y'])
+            base = self._get_height(f['x'], f['y'])
 
             t = np.linspace(0, 2*np.pi, 24)
-            z = np.array([base_z, base_z+6])
+            z = np.array([base, base+6])
             T, Z = np.meshgrid(t, z)
 
             fig.add_trace(go.Surface(
@@ -132,6 +154,24 @@ class Visualizer3D:
                 y=f['y'] + 4*np.sin(T),
                 z=Z,
                 showscale=False
+            ))
+
+    # ================= LIVESTOCK =================
+    def _add_all_livestock_3d(self, fig, layout):
+        features = layout.get('features', {})
+
+        for key in ['goat_shed','cow_shed','chicken_coop']:
+            if key not in features:
+                continue
+
+            f = features[key]
+            base = self._get_height(f['x'], f['y'])
+
+            fig.add_trace(go.Mesh3d(
+                x=[f['x'], f['x']+f['width'], f['x']+f['width'], f['x'], f['x'], f['x']+f['width'], f['x']+f['width'], f['x']],
+                y=[f['y'], f['y'], f['y']+f['height'], f['y']+f['height'], f['y'], f['y'], f['y']+f['height'], f['y']+f['height']],
+                z=[base,base,base,base, base+8,base+8,base+8,base+8],
+                color='#D7CCC8'
             ))
 
     # ================= TREES =================
@@ -142,15 +182,30 @@ class Visualizer3D:
 
         z = zone_pos['z2']
 
-        for i in range(15):
+        for _ in range(20):
             tx = z['x'] + np.random.uniform(0, z['width'])
             ty = z['y'] + np.random.uniform(0, z['height'])
 
-            ground = self._get_height(tx, ty)
+            base = self._get_height(tx, ty)
 
             fig.add_trace(go.Mesh3d(
                 x=[tx, tx+3, tx-3, tx],
                 y=[ty, ty+3, ty+3, ty],
-                z=[ground+5,ground+5,ground+5,ground+15],
+                z=[base+5, base+5, base+5, base+15],
                 color=np.random.choice(['#2E7D32','#1B5E20','#388E3C'])
             ))
+
+    # ================= PATH =================
+    def _add_paths(self, fig, layout):
+        L, W = layout['dimensions']['L'], layout['dimensions']['W']
+
+        x = np.linspace(0, L, 100)
+        y = np.full_like(x, W*0.5)
+
+        z = np.array([self._get_height(xi, yi)+1 for xi, yi in zip(x,y)])
+
+        fig.add_trace(go.Scatter3d(
+            x=x, y=y, z=z,
+            mode='lines',
+            line=dict(width=8, color='#A1887F')
+        ))
