@@ -1,301 +1,198 @@
 """
-3D Visualization Engine — FIXED & INTEGRATED
-Homestead Architect Pro 2026
-
-Fixes:
-  - All livestock types drawn individually (goat, chicken, pig, cow, fish, bees)
-  - Features positioned correctly matching layout_engine output
-  - Proper 3D solids for every feature
+Homestead Architect Pro 2026 - Interactive 3D Engine v5.1
+Features: 3D Labels, Fullscreen Map, Toggle HUD, and HTML Export.
 """
 
 import streamlit as st
-import plotly.graph_objects as go
-import numpy as np
-from typing import Dict, Any, List
+import json
 
 class Visualizer3D:
-    """Creates interactive 3D homestead models using Plotly."""
-
-    ZONE_COLORS = {
-        'z0': '#F5F5DC',
-        'z1': '#90EE90',
-        'z2': '#228B22',
-        'z3': '#F0E68C',
-        'z4': '#DDA0DD',
-    }
-    ZONE_NAMES = {
-        'z0': 'Zone 0 – Residential',
-        'z1': 'Zone 1 – Kitchen Garden',
-        'z2': 'Zone 2 – Food Forest',
-        'z3': 'Zone 3 – Pasture / Crops',
-        'z4': 'Zone 4 – Buffer Zone',
-    }
-
-    def create(self, layout: Dict[str, Any]):
-        """Main entry point for Streamlit to render the 3D map."""
-        # डेटा सेफ्टी चेक: अगर लेआउट खाली है तो एरर न दें
-        if not layout or 'dimensions' not in layout:
+    def create(self, layout_data: dict):
+        # डेटा सेफ्टी चेक
+        if not layout_data or 'dimensions' not in layout_data:
             st.info("👈 पहले 'Design' टैब में अपना नक्शा जनरेट करें।")
             return
 
-        fig = go.Figure()
-
-        # परतों (Layers) को जोड़ना
-        self._add_terrain(fig, layout)
-        self._add_zones_3d(fig, layout)
-        self._add_house_3d(fig, layout)
-        self._add_features_3d(fig, layout)
-        self._add_all_livestock_3d(fig, layout)
-        self._add_trees_3d(fig, layout)
-
-        L = layout['dimensions']['L']
-        W = layout['dimensions']['W']
-        acres = layout.get('acres', round(L * W / 43560, 2))
-
-        fig.update_layout(
-            title=dict(
-                text=f"🏡 3D Homestead — {acres:.2f} acres ({int(L)} × {int(W)} ft)",
-                font=dict(size=17, color='#2E7D32', family='Arial'),
-                x=0.5,
-            ),
-            scene=dict(
-                xaxis_title='Length (ft)',
-                yaxis_title='Width (ft)',
-                zaxis_title='Height (ft)',
-                aspectmode='data',
-                bgcolor='#D0E8F5',
-                camera=dict(
-                    eye=dict(x=1.4, y=-1.4, z=0.9),
-                    up=dict(x=0, y=0, z=1),
-                ),
-                xaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
-                yaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
-                zaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
-            ),
-            legend=dict(
-                x=0.01, y=0.99,
-                bgcolor='rgba(255,255,255,0.85)',
-                bordercolor='#AAAAAA', borderwidth=1,
-                font=dict(size=11),
-            ),
-            paper_bgcolor='#EAF4FB',
-            margin=dict(l=0, r=0, t=55, b=0),
-            height=670, # मोबाइल स्क्रीन के लिए ऊँचाई फिक्स की
-        )
+        json_layout = json.dumps(layout_data)
         
-        # Streamlit में डिस्प्ले करना
-        st.plotly_chart(fig, use_container_width=True)
+        html_template = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        *{{margin:0;padding:0;box-sizing:border-box}}
+        body{{font-family: 'Segoe UI', sans-serif; background:#0f172a; overflow:hidden;}}
+        #viewer-wrap{{position:relative; width:100vw; height:750px;}}
+        #three-canvas{{display:block; width:100%; height:100%}}
+        
+        /* Interactive HUD Panel */
+        #hud{{position:absolute; top:20px; left:20px; background:rgba(15,23,42,0.85); color:#e2e8f0;
+             border-radius:12px; padding:15px; font-size:12px; border:1px solid rgba(255,255,255,0.1); 
+             backdrop-filter: blur(8px); transition: 0.3s; z-index: 100;}}
+        #hud.hidden{{transform: translateX(-150%); opacity: 0;}}
+        #hud b{{color:#38bdf8; font-size:14px; display:block; margin-bottom:4px;}}
+        
+        /* Control Buttons */
+        #controls{{position:absolute; top:20px; right:20px; display:flex; flex-direction:column; gap:8px; z-index: 100;}}
+        .btn{{background:rgba(15,23,42,0.8); color:#f1f5f9; border:1px solid rgba(255,255,255,0.2);
+              border-radius:8px; padding:10px 16px; font-size:12px; cursor:pointer; transition:0.3s; text-align:center;}}
+        .btn:hover{{background:#1e293b; border-color:#38bdf8;}}
+        .btn.download{{background:#166534; border-color:#4ade80; font-weight:bold;}}
+        
+        /* 3D Labels Style */
+        .label{{color: white; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px; 
+               font-size: 10px; pointer-events: none; white-space: nowrap; border: 1px solid rgba(255,255,255,0.2);}}
+    </style>
+</head>
+<body>
 
-    # ── Geometry primitives ──────────────────────────────────────────────────
+<div id="viewer-wrap">
+    <canvas id="three-canvas"></canvas>
+    
+    <div id="hud" id="main-hud">
+        <b>🌿 {layout_data.get('location', 'Custom Plot')}</b>
+        <span>Size: {layout_data.get('dimensions', {}).get('L', 100)} × {layout_data.get('dimensions', {}).get('W', 100)} ft</span><br>
+        <span>Engine: <span style="color:#4ade80">Realistic v5.1</span></span>
+    </div>
 
-    @staticmethod
-    def _box_mesh(x0, y0, z0, x1, y1, z1, color, name,
-                  opacity=0.85, show_legend=True) -> go.Mesh3d:
-        vx = [x0, x1, x1, x0,  x0, x1, x1, x0]
-        vy = [y0, y0, y1, y1,  y0, y0, y1, y1]
-        vz = [z0, z0, z0, z0,  z1, z1, z1, z1]
-        fi = [0, 0,  4, 4,  0, 0,  2, 2,  0, 0,  1, 1]
-        fj = [1, 2,  5, 6,  1, 5,  3, 7,  3, 7,  2, 6]
-        fk = [2, 3,  6, 7,  5, 4,  7, 6,  7, 4,  6, 5]
-        return go.Mesh3d(
-            x=vx, y=vy, z=vz, i=fi, j=fj, k=fk,
-            color=color, opacity=opacity, name=name,
-            showlegend=show_legend, flatshading=True,
-            lighting=dict(ambient=0.65, diffuse=0.9, specular=0.2,
-                          roughness=0.6, fresnel=0.1),
-        )
+    <div id="controls">
+        <button class="btn" onclick="toggleHUD()">👁️ Toggle Data Panel</button>
+        <button class="btn download" onclick="downloadHTML()">📥 Download 3D HTML</button>
+    </div>
+</div>
 
-    @staticmethod
-    def _hip_roof(x0, y0, x1, y1, base_z, apex_z, color,
-                  name='Roof') -> go.Mesh3d:
-        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-        vx = [x0, x1, x1, x0, cx]
-        vy = [y0, y0, y1, y1, cy]
-        vz = [base_z] * 4 + [apex_z]
-        fi = [0, 1, 2, 3]
-        fj = [1, 2, 3, 0]
-        fk = [4, 4, 4, 4]
-        return go.Mesh3d(
-            x=vx, y=vy, z=vz, i=fi, j=fj, k=fk,
-            color=color, opacity=0.97, name=name,
-            showlegend=False, flatshading=True,
-        )
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-    @staticmethod
-    def _cone_tree(tx, ty, trunk_bot_z=1.5, trunk_top_z=7.0,
-                   canopy_bot_z=7.0, canopy_top_z=18.0,
-                   canopy_r=7.5, trunk_r=1.2,
-                   color_canopy='#2E7D32', label='',
-                   show_legend=False) -> List:
-        traces = []
-        n = 18
-        theta_t = np.linspace(0, 2*np.pi, n)
-        z_t = np.array([trunk_bot_z, trunk_top_z])
-        T_grid, Z_grid = np.meshgrid(theta_t, z_t)
-        traces.append(go.Surface(
-            x=tx + trunk_r * np.cos(T_grid),
-            y=ty + trunk_r * np.sin(T_grid),
-            z=Z_grid,
-            colorscale=[[0, '#6D4C41'], [1, '#8D6E63']],
-            showscale=False, showlegend=False, opacity=0.95, name='Trunk',
-        ))
-        theta_c = np.linspace(0, 2*np.pi, n, endpoint=False)
-        vx = list(tx + canopy_r * np.cos(theta_c)) + [tx]
-        vy = list(ty + canopy_r * np.sin(theta_c)) + [ty]
-        vz = [canopy_bot_z] * n + [canopy_top_z]
-        apex = n
-        traces.append(go.Mesh3d(
-            x=vx, y=vy, z=vz,
-            i=list(range(n)),
-            j=[(k+1) % n for k in range(n)],
-            k=[apex] * n,
-            color=color_canopy, opacity=0.88,
-            name=label if label else 'Tree',
-            showlegend=show_legend, flatshading=True,
-        ))
-        return traces
+<script>
+    let scene, camera, renderer, controls;
+    const data = {json_layout}; 
+    const L = data.dimensions?.L || 100;
+    const W = data.dimensions?.W || 100;
 
-    # ── Scene layers ─────────────────────────────────────────────────────────
+    function init() {{
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xaec6cf);
+        
+        camera = new THREE.PerspectiveCamera(55, window.innerWidth / 750, 1, 10000);
+        camera.position.set(L, L*0.6, W);
 
-    def _add_terrain(self, fig, layout):
-        L, W = layout['dimensions']['L'], layout['dimensions']['W']
-        x = np.linspace(0, L, 30)
-        y = np.linspace(0, W, 30)
-        X, Y = np.meshgrid(x, y)
-        slope = layout.get('slope', 'Flat')
-        Z = np.zeros_like(X)
-        if slope == 'South':   Z = Y * 0.03
-        elif slope == 'North': Z = (W - Y) * 0.03
-        elif slope == 'East':  Z = X * 0.03
-        elif slope == 'West':  Z = (L - X) * 0.03
-        fig.add_trace(go.Surface(
-            x=X, y=Y, z=Z,
-            colorscale=[[0, '#81C784'], [0.5, '#4CAF50'], [1, '#2E7D32']],
-            showscale=False, opacity=0.82,
-            name='Terrain', showlegend=True,
-            lighting=dict(ambient=0.7, diffuse=0.85),
-        ))
+        renderer = new THREE.WebGLRenderer({{ canvas: document.getElementById('three-canvas'), antialias: true }});
+        renderer.setSize(window.innerWidth, 750);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    def _add_zones_3d(self, fig, layout):
-        for zone_id, pos in layout.get('zone_positions', {}).items():
-            fig.add_trace(self._box_mesh(
-                pos['x'], pos['y'], 0,
-                pos['x'] + pos['width'], pos['y'] + pos['height'], 1.5,
-                color=self.ZONE_COLORS.get(zone_id, '#CCCCCC'),
-                name=self.ZONE_NAMES.get(zone_id, zone_id),
-                opacity=0.40,
-            ))
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(L, 300, W/2);
+        sun.castShadow = true;
+        scene.add(sun);
 
-    def _add_house_3d(self, fig, layout):
-        L, W = layout['dimensions']['L'], layout['dimensions']['W']
-        pos = layout.get('house_position', 'Center')
-        positions = {
-            'North':        (L*0.30, W*0.82, L*0.40, W*0.12),
-            'South':        (L*0.30, W*0.06, L*0.40, W*0.12),
-            'East':         (L*0.75, W*0.35, L*0.20, W*0.30),
-            'West':         (L*0.05, W*0.35, L*0.20, W*0.30),
-            'Center':       (L*0.35, W*0.40, L*0.30, W*0.20),
-            'Not built yet':(L*0.35, W*0.40, L*0.30, W*0.20),
-        }
-        hx, hy, hw, hd = positions.get(pos, positions['Center'])
-        wall_h = 10.0
-        base_z = 1.5
-        roof_bot = base_z + wall_h
-        roof_top = roof_bot + min(hw, hd) * 0.42
+        // Ground
+        const ground = new THREE.Mesh(
+            new THREE.PlaneGeometry(L * 1.5, W * 1.5),
+            new THREE.MeshStandardMaterial({{ color: 0x4a7c59, roughness: 0.8 }})
+        );
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
 
-        fig.add_trace(self._box_mesh(
-            hx, hy, base_z, hx+hw, hy+hd, roof_bot,
-            color='#8D6E63', name='House', opacity=0.96,
-        ))
-        fig.add_trace(self._hip_roof(
-            hx, hy, hx+hw, hy+hd,
-            base_z=roof_bot, apex_z=roof_top,
-            color='#4E342E',
-        ))
+        buildScene();
 
-    def _add_features_3d(self, fig, layout):
-        features = layout.get('features', {})
-        # Pond
-        if 'pond' in features:
-            f = features['pond']
-            r = f['radius']
-            rg = np.linspace(0, r, 10)
-            tg = np.linspace(0, 2*np.pi, 36)
-            R, T = np.meshgrid(rg, tg)
-            fig.add_trace(go.Surface(
-                x=f['x'] + R * np.cos(T) * (1 + 0.1 * np.sin(3*T)),
-                y=f['y'] + R * np.sin(T) * (1 + 0.1 * np.cos(2*T)),
-                z=np.full_like(R, -0.8),
-                colorscale=[[0, '#4FC3F7'], [1, '#0288D1']],
-                showscale=False, opacity=0.85,
-                name='Pond / Fish', showlegend=True,
-            ))
-        # Borewell
-        if 'well' in features:
-            f = features['well']
-            rw = f.get('radius', 4)
-            theta_w = np.linspace(0, 2*np.pi, 24)
-            z_w = np.array([1.5, 5.0])
-            Tw, Zw = np.meshgrid(theta_w, z_w)
-            fig.add_trace(go.Surface(
-                x=f['x'] + rw * np.cos(Tw),
-                y=f['y'] + rw * np.sin(Tw),
-                z=Zw,
-                colorscale=[[0, '#546E7A'], [1, '#90A4AE']],
-                showscale=False, opacity=0.95,
-                name='Borewell', showlegend=True,
-            ))
-        # Solar panels
-        if 'solar' in features:
-            f = features['solar']
-            pw, ph = f['width'] / 3, f['height'] / 2
-            for col in range(3):
-                for row in range(2):
-                    px = f['x'] + col * pw + 1
-                    py = f['y'] + row * ph + 1
-                    fig.add_trace(self._box_mesh(
-                        px, py, 4.0, px + pw - 2, py + ph - 2, 4.4,
-                        color='#1565C0',
-                        name='Solar Panels' if (col == 0 and row == 0) else '',
-                        opacity=0.95, show_legend=(col == 0 and row == 0),
-                    ))
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        animate();
+    }}
 
-    def _add_all_livestock_3d(self, fig, layout):
-        """Draw each livestock type as a distinct 3D shed."""
-        features = layout.get('features', {})
-        livestock_config = {
-            'goat_shed':   ('#FFCCBC', '#4E342E', 'Goat Shed',    7.0),
-            'chicken_coop':('#FFF9C4', '#F57F17', 'Chicken Coop', 5.0),
-            'piggery':     ('#F8BBD0', '#880E4F', 'Piggery',      6.0),
-            'cow_shed':    ('#D7CCC8', '#5D4037', 'Cow Shed',      9.0),
-            'fish_tanks':  ('#B3E5FC', '#0288D1', 'Fish Tanks',   3.0),
-            'bee_hives':   ('#FFF176', '#F9A825', 'Bee Hives',    4.0),
-        }
-        for key, (wall_color, roof_color, label, shed_h) in livestock_config.items():
-            if key not in features: continue
-            f = features[key]
-            base_z, roof_bot = 1.5, 1.5 + shed_h
-            roof_top = roof_bot + f['width'] * 0.25
-            fig.add_trace(self._box_mesh(
-                f['x'], f['y'], base_z, f['x']+f['width'], f['y']+f['height'], roof_bot,
-                color=wall_color, name=label, opacity=0.90,
-            ))
-            fig.add_trace(self._hip_roof(
-                f['x'], f['y'], f['x']+f['width'], f['y']+f['height'],
-                base_z=roof_bot, apex_z=roof_top, color=roof_color,
-            ))
+    function createLabel(text, x, y, z) {{
+        const div = document.createElement('div');
+        div.className = 'label';
+        div.textContent = text;
+        div.style.position = 'absolute';
+        div.style.pointerEvents = 'none';
+        document.getElementById('viewer-wrap').appendChild(div);
 
-    def _add_trees_3d(self, fig, layout):
-        zone_pos = layout.get('zone_positions', {})
-        if 'z2' not in zone_pos: return
-        z = zone_pos['z2']
-        rel_positions = [(0.18, 0.30), (0.48, 0.58), (0.78, 0.38), (0.28, 0.72), (0.68, 0.20), (0.58, 0.82)]
-        canopy_colors = ['#2E7D32', '#388E3C', '#1B5E20', '#43A047', '#66BB6A', '#33691E']
-        tree_labels = ['Mango', 'Coconut', 'Jackfruit', 'Banana', 'Guava', 'Papaya']
-        for idx, (rx, ry) in enumerate(rel_positions):
-            tx, ty = z['x'] + rx * z['width'], z['y'] + ry * z['height']
-            for trace in self._cone_tree(
-                tx, ty, color_canopy=canopy_colors[idx % 6],
-                label=tree_labels[idx % 6], show_legend=(idx == 0),
-            ):
-                fig.add_trace(trace)
+        return {{
+            element: div,
+            position: new THREE.Vector3(x, y, z)
+        }};
+    }}
+
+    const labels = [];
+
+    function buildScene() {{
+        // House
+        const house = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.BoxGeometry(22, 14, 18), new THREE.MeshStandardMaterial({{color: 0xefebe9}}));
+        body.position.y = 7; body.castShadow = true;
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(18, 12, 4), new THREE.MeshStandardMaterial({{color: 0x4b2c20}}));
+        roof.position.y = 19; roof.rotation.y = Math.PI/4;
+        house.add(body, roof);
+        
+        // Dynamic House Placement
+        if(data.house_position === 'North') house.position.z = -W*0.3;
+        else if(data.house_position === 'South') house.position.z = W*0.3;
+        
+        scene.add(house);
+        labels.push(createLabel('🏡 Main House', house.position.x, 25, house.position.z));
+
+        // Trees
+        const treeCount = data.tree_count || 10;
+        for(let i=0; i<treeCount; i++) {{
+            const tx = (Math.random() - 0.5) * L;
+            const tz = (Math.random() - 0.5) * W;
+            const tree = new THREE.Group();
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1, 6), new THREE.MeshStandardMaterial({{color: 0x3d2b1f}}));
+            trunk.position.y = 3; tree.add(trunk);
+            const leaves = new THREE.Mesh(new THREE.SphereGeometry(5), new THREE.MeshStandardMaterial({{color: 0x2d5a27}}));
+            leaves.position.y = 10; tree.add(leaves);
+            tree.position.set(tx, 0, tz);
+            scene.add(tree);
+            if(i === 0) labels.push(createLabel('🌳 Food Forest', tx, 16, tz));
+        }}
+    }}
+
+    function toggleHUD() {{
+        const hud = document.getElementById('hud');
+        hud.classList.toggle('hidden');
+    }}
+
+    function downloadHTML() {{
+        const htmlContent = document.documentElement.outerHTML;
+        const blob = new Blob([htmlContent], {{ type: 'text/html' }});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'Homestead_3D_Design.html';
+        a.click();
+    }}
+
+    function animate() {{
+        requestAnimationFrame(animate);
+        controls.update();
+        
+        // Update Labels Position [3D to 2D Mapping]
+        labels.forEach(lbl => {{
+            const pos = lbl.position.clone().project(camera);
+            if(pos.z > 1) {{
+                lbl.element.style.display = 'none';
+            }} else {{
+                lbl.element.style.display = 'block';
+                const x = (pos.x * .5 + .5) * window.innerWidth;
+                const y = (pos.y * -.5 + .5) * 750;
+                lbl.element.style.left = x + 'px';
+                lbl.element.style.top = y + 'px';
+            }}
+        }});
+
+        renderer.render(scene, camera);
+    }}
+
+    init();
+</script>
+</body>
+</html>
+"""
+        st.components.v1.html(html_template, height=780)
