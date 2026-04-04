@@ -1,8 +1,6 @@
 
 # REALISTIC 3D VISUALIZER — Procedural Geometry with Real-world Scale
-# Scale: 1 unit = 1 foot | Real materials | LOD system | Collision-aware placement
-
-code_content = '''
+# Scale: 1 unit = 1 foot | Real materials | LOD system | Collision-aware plac
 """
 REALISTIC 3D Homestead Visualizer Pro 2026
 Scale: 1 unit = 1 foot | Real-world proportions | LOD System | Collision Detection
@@ -849,31 +847,3 @@ class RealisticVisualizer3D:
             height=800,
             title=f"Realistic 3D View — {self.acres:.1f} acres | Scale: 1 unit = 1 foot",
         )
-'''
-
-# Save the file
-with open('/mnt/kimi/output/realistic_visualizer_3d.py', 'w', encoding='utf-8') as f:
-    f.write(code_content)
-
-print("✅ REALISTIC VISUALIZER SAVED")
-print(f"📏 Size: {len(code_content)} characters")
-print("\n" + "="*60)
-print("🔥 REALISTIC FEATURES IMPLEMENTED:")
-print("="*60)
-print("1. REAL-WORLD SCALE: 1 unit = 1 foot (not arbitrary)")
-print("2. DYNAMIC SCALING: Auto-adjusts for 1-1000 acres")
-print("   - 1 acre: Objects at 100% scale")
-print("   - 1000 acres: Objects scale down to prevent overlap")
-print("3. COLLISION DETECTION: No overlapping buildings/trees")
-print("4. REAL MATERIALS: Concrete, brick, wood, metal, glass with properties")
-print("5. BOTANICALLY ACCURATE TREES:")
-print("   - Mango: 35ft height, 25ft canopy")
-print("   - Coconut: 60ft height, palm fronds")
-print("   - Banana: 15ft clumping grove")
-print("6. ARCHITECTURALLY CORRECT BUILDINGS:")
-print("   - House: 30x40ft with proper walls, roof, porch")
-print("   - Barns: Real barn dimensions (Cow: 20x40ft)")
-print("7. REALISTIC WATER: Ponds with sloping banks, depth")
-print("8. ROAD NETWORK: 12ft wide main road with markings")
-print("9. LOD SYSTEM: Detail level adjusts with zoom/plot size")
-print("10. PHYSICALLY BASED LIGHTING: Roughness, metallic, specular")
