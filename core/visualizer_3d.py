@@ -1,6 +1,6 @@
 """
-Homestead Architect Pro 2026 — ULTRA CINEMATIC EDITION
-Features: 3D Labels (Large Text), camera_logic Integration, Toggle HUD/Legend.
+Homestead Architect Pro 2026 — ULTRA PREMIUM EDITION
+Features: Large 3D Labels, Dynamic Camera Logic, Toggle HUD, and Full Data Sync.
 """
 
 import streamlit as st
@@ -10,124 +10,119 @@ import json
 from typing import Dict, Any, List
 
 class Visualizer3D:
-    """Creates interactive 3D homestead models with cinematic controls."""
+    """Creates high-end interactive 3D homestead models using Plotly."""
 
     ZONE_COLORS = {
-        'z0': '#F5F5DC', 'z1': '#90EE90', 'z2': '#228B22',
-        'z3': '#F0E68C', 'z4': '#DDA0DD',
+        'z0': '#F5F5DC', 'z1': '#90EE90', 'z2': '#228B22', 'z3': '#F0E68C', 'z4': '#DDA0DD',
     }
     ZONE_NAMES = {
         'z0': 'Zone 0 – Residential', 'z1': 'Zone 1 – Kitchen Garden',
-        'z2': 'Zone 2 – Food Forest', 'z3': 'Zone 3 – Pasture / Crops',
-        'z4': 'Zone 4 – Buffer Zone',
+        'z2': 'Zone 2 – Food Forest', 'z3': 'Zone 3 – Pasture', 'z4': 'Zone 4 – Buffer',
     }
 
     def create(self, layout: Dict[str, Any]):
-        """Main entry point for Streamlit to render the 3D map."""
         if not layout or 'dimensions' not in layout:
             st.info("👈 पहले 'Design' टैब में अपना नक्शा जनरेट करें।")
             return
 
         fig = go.Figure()
 
-        # --- परतों को जोड़ना (No deletions, as requested) ---
+        # --- Scene Layers (वही पुराना सॉलिड लॉजिक) ---
         self._add_terrain(fig, layout)
         self._add_zones_3d(fig, layout)
         self._add_house_3d(fig, layout)
         self._add_features_3d(fig, layout)
         self._add_all_livestock_3d(fig, layout)
         self._add_trees_3d(fig, layout)
-        
+
         # --- नया फीचर: बड़े अक्षरों में नाम (Large 3D Labels) ---
-        self._add_3d_labels_large(fig, layout)
+        self._add_large_labels(fig, layout)
 
         L = layout['dimensions']['L']
         W = layout['dimensions']['W']
         acres = layout.get('acres', round(L * W / 43560, 2))
 
-        # --- camera_logic.js वाले मक्खन जैसे एंगल्स ---
-        camera_logic = {
-            'default': dict(eye=dict(x=1.4, y=-1.4, z=0.9)),
-            'top': dict(eye=dict(x=0, y=0, z=2.5)),
-            'cinematic': dict(eye=dict(x=2.0, y=2.0, z=1.2)),
-            'front': dict(eye=dict(x=0, y=-2.0, z=0.5))
-        }
-
+        # --- कैमरा लॉजिक और UI बटन (Smooth कैमरा और डिब्बा छुपाने का ऑप्शन) ---
         fig.update_layout(
             title=dict(
-                text=f"🏡 3D Homestead — {acres:.2f} acres ({int(L)} × {int(W)} ft)",
-                font=dict(size=17, color='#2E7D32', family='Arial'),
+                text=f"🏡 {layout.get('location', 'Premium Plot')} — {acres:.2f} acres",
+                font=dict(size=18, color='#166534', family='Arial Black'),
                 x=0.5,
             ),
             scene=dict(
                 xaxis_title='Length (ft)', yaxis_title='Width (ft)', zaxis_title='Height (ft)',
                 aspectmode='data', bgcolor='#D0E8F5',
-                camera=camera_logic['default'], # camera_logic apply किया
+                # कैमरा एंगल्स जो 'camera_logic.js' की तरह काम करेंगे
+                camera=dict(eye=dict(x=1.4, y=-1.4, z=1.0)), 
                 xaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
                 yaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
-                zaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
+                zaxis=dict(showgrid=True, gridcolor='#BBBBBB', range=[-5, 50]),
             ),
-            # 'Show/Hide' और 'Camera' कंट्रोल्स
+            # नया UI पैनल: डिब्बा छुपाना और कैमरा बदलना
             updatemenus=[
-                # बटन 1: सफ़ेद डिब्बा (Legend) और डेटा छुपाने के लिए
+                # 1. 'Legend/सफ़ेद डिब्बा' छुपाने का बटन
                 dict(
-                    type="buttons", direction="down", x=0.01, y=0.8,
+                    type="buttons", direction="right", x=0.01, y=1.05,
                     buttons=[
-                        dict(label="👁️ Show All", method="relayout", args=[{"showlegend": True, "title.text": f"🏡 {acres:.2f} Acres"}]),
-                        dict(label="🚫 Hide Box/Data", method="relayout", args=[{"showlegend": False, "title.text": ""}])
+                        dict(label="👁️ Show Legend", method="relayout", args=[{"showlegend": True}]),
+                        dict(label="🚫 Hide Legend", method="relayout", args=[{"showlegend": False}])
                     ]
                 ),
-                # बटन 2: camera_logic.js वाले मक्खन एंगल्स
+                # 2. कैमरा एंगल्स (Smooth Camera Angles)
                 dict(
-                    type="buttons", direction="left", x=0.5, y=-0.1, xanchor="center",
+                    type="dropdown", direction="down", x=0.99, y=1.05,
                     buttons=[
-                        dict(label="🎯 Default", method="relayout", args=[{"scene.camera": camera_logic['default']}]),
-                        dict(label="☁️ Top View", method="relayout", args=[{"scene.camera": camera_logic['top']}]),
-                        dict(label="🎬 Cinematic", method="relayout", args=[{"scene.camera": camera_logic['cinematic']}]),
+                        dict(label="🎥 Cinematic View", method="relayout", args=[{"scene.camera.eye": {"x": 1.4, "y": -1.4, "z": 1.0}}]),
+                        dict(label="🗺️ Top View", method="relayout", args=[{"scene.camera.eye": {"x": 0, "y": 0, "z": 2.5}}]),
+                        dict(label="🏚️ Side View", method="relayout", args=[{"scene.camera.eye": {"x": 2.2, "y": 0, "z": 0.5}}])
                     ]
                 )
             ],
-            legend=dict(
-                x=0.01, y=0.99, bgcolor='rgba(255,255,255,0.85)',
-                bordercolor='#AAAAAA', borderwidth=1, font=dict(size=11),
-            ),
-            paper_bgcolor='#EAF4FB', margin=dict(l=0, r=0, t=55, b=0), height=750,
+            legend=dict(x=0.01, y=0.99, bgcolor='rgba(255,255,255,0.85)', borderwidth=1),
+            paper_bgcolor='#EAF4FB', margin=dict(l=0, r=0, t=60, b=0), height=750,
         )
-        
-        # Streamlit में डिस्प्ले और HTML डाउनलोड बटन
+
+        # 1. 3D मैप डिस्प्ले
         st.plotly_chart(fig, use_container_width=True)
-        
+
+        # 2. HTML डाउनलोड बटन (ताकि यूजर अपने पास रख सके)
         html_bytes = fig.to_html(include_plotlyjs='cdn', full_html=True)
-        st.download_button(label="⬇️ Download 3D Map (HTML)", data=html_bytes, 
-                           file_name="homestead_3d.html", mime="text/html")
+        st.download_button(
+            label="📥 Download 3D Architectural Map (HTML)",
+            data=html_bytes, file_name="homestead_3d_pro.html", mime="text/html", use_container_width=True
+        )
 
-    def _add_3d_labels_large(self, fig, layout):
-        """बड़े अक्षरों में नाम जोड़ने वाला फंक्शन।"""
+    def _add_large_labels(self, fig, layout):
+        """सभी मॉडल्स के ऊपर बड़े अक्षरों में नाम लिखना (Large Text Scatter)"""
         labels = []
-        features = layout.get('features', {})
         L, W = layout['dimensions']['L'], layout['dimensions']['W']
+        
+        # घर का लेबल (House Location के हिसाब से)
+        h_pos = layout.get('house_position', 'Center')
+        hx, hy = L*0.5, W*0.5
+        if h_pos == 'North': hy = W*0.85
+        elif h_pos == 'South': hy = W*0.1
+        labels.append({'x': hx, 'y': hy, 'z': 22, 'txt': '🏠 MAIN HOUSE'})
 
-        # घर का लेबल
-        labels.append({'x': L*0.5, 'y': W*0.5, 'z': 25, 'txt': '🏠 MAIN HOUSE'})
+        # फीचर्स के नाम (Pond, Well, Solar)
+        feats = layout.get('features', {})
+        if 'pond' in feats: labels.append({'x': feats['pond']['x'], 'y': feats['pond']['y'], 'z': 5, 'txt': '💧 POND'})
+        if 'well' in feats: labels.append({'x': feats['well']['x'], 'y': feats['well']['y'], 'z': 10, 'txt': '🚰 WELL'})
+        if 'solar' in feats: labels.append({'x': feats['solar']['x'], 'y': feats['solar']['y'], 'z': 8, 'txt': '☀️ SOLAR ARRAY'})
 
         # जानवरों के शेड के नाम
-        livestock_labels = {
-            'goat_shed': '🐐 GOATS', 'chicken_coop': '🐔 CHICKENS', 
-            'cow_shed': '🐄 COWS', 'pond': '🐟 FISH POND'
-        }
-        for key, txt in livestock_labels.items():
-            if key in features:
-                f = features[key]
-                labels.append({'x': f.get('x', 0), 'y': f.get('y', 0), 'z': 15, 'txt': txt})
+        for k, label in {'goat_shed': '🐐 GOATS', 'chicken_coop': '🐔 POULTRY', 'cow_shed': '🐄 COWS'}.items():
+            if k in feats:
+                labels.append({'x': feats[k]['x']+5, 'y': feats[k]['y']+5, 'z': 12, 'txt': label})
 
         fig.add_trace(go.Scatter3d(
             x=[l['x'] for l in labels], y=[l['y'] for l in labels], z=[l['z'] for l in labels],
             mode='text', text=[l['txt'] for l in labels],
-            textfont=dict(size=14, color="black", family="Arial Black"), # अक्षर बड़े और बोल्ड किए
-            showlegend=False, name="Labels"
+            textfont=dict(size=14, color="black", family="Arial Black"), 
+            name="Object Names", showlegend=False
         ))
 
-    # --- पुराने प्रिमिटिव्स (No Changes) ---
+    # --- Geometry Primitives (सारे पुराने कोड को वैसे ही रखा है) ---
     @staticmethod
     def _box_mesh(x0, y0, z0, x1, y1, z1, color, name, opacity=0.85, show_legend=True) -> go.Mesh3d:
         vx, vy, vz = [x0, x1, x1, x0, x0, x1, x1, x0], [y0, y0, y1, y1, y0, y0, y1, y1], [z0, z0, z0, z0, z1, z1, z1, z1]
@@ -145,41 +140,51 @@ class Visualizer3D:
         traces = []
         n = 18; theta_t = np.linspace(0, 2*np.pi, n); z_t = np.array([trunk_bot_z, trunk_top_z])
         T_grid, Z_grid = np.meshgrid(theta_t, z_t)
-        traces.append(go.Surface(x=tx + trunk_r * np.cos(T_grid), y=ty + trunk_r * np.sin(T_grid), z=Z_grid, colorscale=[[0, '#6D4C41'], [1, '#8D6E63']], showscale=False, showlegend=False))
+        traces.append(go.Surface(x=tx + trunk_r * np.cos(T_grid), y=ty + trunk_r * np.sin(T_grid), z=Z_grid, colorscale=[[0, '#6D4C41'], [1, '#8D6E63']], showscale=False, showlegend=False, opacity=0.95))
         theta_c = np.linspace(0, 2*np.pi, n, endpoint=False); vx = list(tx + canopy_r * np.cos(theta_c)) + [tx]; vy = list(ty + canopy_r * np.sin(theta_c)) + [ty]; vz = [canopy_bot_z] * n + [canopy_top_z]
-        traces.append(go.Mesh3d(x=vx, y=vy, z=vz, i=list(range(n)), j=[(k+1)%n for k in range(n)], k=[n]*n, color=color_canopy, opacity=0.88, name=label, showlegend=show_legend))
+        traces.append(go.Mesh3d(x=vx, y=vy, z=vz, i=list(range(n)), j=[(k+1)%n for k in range(n)], k=[n]*n, color=color_canopy, opacity=0.88, name=label if label else 'Tree', showlegend=show_legend, flatshading=True))
         return traces
 
-    # --- लेयर्स (No Changes) ---
+    # --- Scene Layers (Data-Driven) ---
     def _add_terrain(self, fig, layout):
         L, W = layout['dimensions']['L'], layout['dimensions']['W']
         x, y = np.linspace(0, L, 30), np.linspace(0, W, 30); X, Y = np.meshgrid(x, y); slope = layout.get('slope', 'Flat'); Z = np.zeros_like(X)
         if slope == 'South': Z = Y * 0.03
-        fig.add_trace(go.Surface(x=X, y=Y, z=Z, colorscale='Greens', showscale=False, opacity=0.82, name='Terrain'))
+        elif slope == 'North': Z = (W - Y) * 0.03
+        fig.add_trace(go.Surface(x=X, y=Y, z=Z, colorscale=[[0, '#81C784'], [1, '#2E7D32']], showscale=False, opacity=0.82, name='Terrain', showlegend=True))
 
     def _add_zones_3d(self, fig, layout):
-        for zid, pos in layout.get('zone_positions', {}).items():
-            fig.add_trace(self._box_mesh(pos['x'], pos['y'], 0, pos['x']+pos['width'], pos['y']+pos['height'], 1.5, color=self.ZONE_COLORS.get(zid, '#CCC'), name=zid, opacity=0.4))
+        for zone_id, pos in layout.get('zone_positions', {}).items():
+            fig.add_trace(self._box_mesh(pos['x'], pos['y'], 0, pos['x']+pos['width'], pos['y']+pos['height'], 1.5, color=self.ZONE_COLORS.get(zone_id, '#CCCCCC'), name=self.ZONE_NAMES.get(zone_id, zone_id), opacity=0.40))
 
     def _add_house_3d(self, fig, layout):
         L, W = layout['dimensions']['L'], layout['dimensions']['W']
-        hx, hy, hw, hd = L*0.35, W*0.4, L*0.3, W*0.2
-        fig.add_trace(self._box_mesh(hx, hy, 1.5, hx+hw, hy+hd, 11.5, '#8D6E63', 'House'))
-        fig.add_trace(self._hip_roof(hx, hy, hx+hw, hy+hd, 11.5, 16.5, '#4E342E'))
+        pos = layout.get('house_position', 'Center'); positions = {'North': (L*0.30, W*0.82, L*0.40, W*0.12), 'South': (L*0.30, W*0.06, L*0.40, W*0.12), 'Center': (L*0.35, W*0.40, L*0.30, W*0.20)}
+        hx, hy, hw, hd = positions.get(pos, positions['Center'])
+        fig.add_trace(self._box_mesh(hx, hy, 1.5, hx+hw, hy+hd, 11.5, color='#8D6E63', name='House', opacity=0.96))
+        fig.add_trace(self._hip_roof(hx, hy, hx+hw, hy+hd, 11.5, 17.5, color='#4E342E'))
 
     def _add_features_3d(self, fig, layout):
-        f = layout.get('features', {})
-        if 'well' in f:
-            fig.add_trace(go.Scatter3d(x=[f['well']['x']], y=[f['well']['y']], z=[5], mode='markers', marker=dict(size=10, color='grey'), name='Well'))
+        features = layout.get('features', {})
+        if 'pond' in features:
+            f = features['pond']; r = f['radius']; rg = np.linspace(0, r, 10); tg = np.linspace(0, 2*np.pi, 36); R, T = np.meshgrid(rg, tg)
+            fig.add_trace(go.Surface(x=f['x'] + R*np.cos(T), y=f['y'] + R*np.sin(T), z=np.full_like(R, -0.8), colorscale=[[0, '#4FC3F7'], [1, '#0288D1']], showscale=False, name='Pond', showlegend=True))
+        if 'well' in features:
+            f = features['well']; theta_w = np.linspace(0, 2*np.pi, 24); z_w = np.array([1.5, 6.0]); Tw, Zw = np.meshgrid(theta_w, z_w)
+            fig.add_trace(go.Surface(x=f['x']+4*np.cos(Tw), y=f['y']+4*np.sin(Tw), z=Zw, colorscale='Greys', showscale=False, name='Well', showlegend=True))
 
     def _add_all_livestock_3d(self, fig, layout):
-        f = layout.get('features', {})
-        if 'goat_shed' in f:
-            sh = f['goat_shed']
-            fig.add_trace(self._box_mesh(sh['x'], sh['y'], 1.5, sh['x']+sh['width'], sh['y']+sh['height'], 8.5, '#FFCCBC', 'Livestock'))
+        features = layout.get('features', {})
+        configs = {'goat_shed': ('#FFCCBC', '#4E342E', 'Goat Shed', 7), 'chicken_coop': ('#FFF9C4', '#F57F17', 'Chicken Coop', 5), 'cow_shed': ('#D7CCC8', '#5D4037', 'Cow Shed', 9)}
+        for k, (wc, rc, label, sh) in configs.items():
+            if k in features:
+                f = features[k]; fig.add_trace(self._box_mesh(f['x'], f['y'], 1.5, f['x']+f['width'], f['y']+f['height'], 1.5+sh, wc, label))
+                fig.add_trace(self._hip_roof(f['x'], f['y'], f['x']+f['width'], f['y']+f['height'], 1.5+sh, 1.5+sh+f['width']*0.3, rc))
 
     def _add_trees_3d(self, fig, layout):
-        z2 = layout.get('zone_positions', {}).get('z2')
-        if z2:
-            tx, ty = z2['x']+z2['width']*0.5, z2['y']+z2['height']*0.5
-            for tr in self._cone_tree(tx, ty, label='Trees', show_legend=True): fig.add_trace(tr)
+        z_pos = layout.get('zone_positions', {}); z2 = z_pos.get('z2')
+        if not z2: return
+        rel_pos = [(0.2, 0.3), (0.5, 0.6), (0.8, 0.4)]; tree_labels = ['Mango', 'Jackfruit', 'Coconut']
+        for i, (rx, ry) in enumerate(rel_pos):
+            for trace in self._cone_tree(z2['x']+rx*z2['width'], z2['y']+ry*z2['height'], label=tree_labels[i], show_legend=(i==0)):
+                fig.add_trace(trace)
