@@ -8,7 +8,7 @@ from typing import Dict, Any
 
 class UserInterview:
     """Interactive questionnaire with tree count control"""
-    
+
     QUESTIONS = [
         {
             "id": "location",
@@ -68,39 +68,38 @@ class UserInterview:
             "help": "Helps us recommend appropriate solutions"
         }
     ]
-    
+
     def run(self) -> Dict[str, Any]:
         """Run the interview and return answers"""
         answers = {}
-        
-        st.subheader("🌱 Design Your Homestead")
+
+        st.subheader("Design Your Homestead")
         st.caption("Answer these questions for your custom permaculture design")
-        
+
         with st.form("homestead_interview"):
             for q in self.QUESTIONS:
                 answers[q['id']] = self._render_question(q)
-            
+
             submitted = st.form_submit_button(
-                "🚀 Generate My Homestead Design",
+                "Generate My Homestead Design",
                 use_container_width=True,
                 type="primary"
             )
-        
+
         if submitted:
             if not answers.get('location'):
                 st.error("Please enter your location")
                 return None
-            
-            # Store project name
+
             st.session_state['project_name'] = answers['location'].replace(',', '_').replace(' ', '_')
             return answers
-        
+
         return None
-    
+
     def _render_question(self, q: Dict) -> Any:
         """Render a single question based on type"""
         st.markdown(f"**{q['question']}**")
-        
+
         if q['type'] == 'text':
             return st.text_input(
                 label=q['id'],
@@ -108,7 +107,7 @@ class UserInterview:
                 help=q.get('help', ''),
                 label_visibility="collapsed"
             )
-        
+
         elif q['type'] == 'dimensions':
             col1, col2 = st.columns(2)
             with col1:
@@ -116,7 +115,7 @@ class UserInterview:
             with col2:
                 width = st.number_input("Width (ft)", 10, 10000, 100, help="feet or meters")
             return {"length": length, "width": width}
-        
+
         elif q['type'] == 'select':
             return st.selectbox(
                 label=q['id'],
@@ -124,7 +123,7 @@ class UserInterview:
                 help=q.get('help', ''),
                 label_visibility="collapsed"
             )
-        
+
         elif q['type'] == 'multiselect':
             return st.multiselect(
                 label=q['id'],
@@ -133,7 +132,7 @@ class UserInterview:
                 help=q.get('help', ''),
                 label_visibility="collapsed"
             )
-        
+
         elif q['type'] == 'slider':
             return st.slider(
                 label=q['id'],
@@ -143,5 +142,5 @@ class UserInterview:
                 help=q.get('help', ''),
                 label_visibility="collapsed"
             )
-        
+
         return None
