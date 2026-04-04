@@ -1,404 +1,340 @@
-import streamlit as st
-import json
+"""
+3D Visualization Engine â€” FIXED
+Homestead Architect Pro 2026
+
+Fixes:
+  - All livestock types drawn individually (goat, chicken, pig, cow, fish, bees)
+  - Features positioned correctly matching layout_engine output
+  - Proper 3D solids for every feature
+"""
+
+import plotly.graph_objects as go
+import numpy as np
+from typing import Dict, Any, List
+
 
 class Visualizer3D:
-    """
-    Homestead Architect Pro 2026 - Plotly 3D Engine.
-    Integrated with Streamlit and Interactive HTML/JS.
-    """
-    def create(self, layout_data: dict):
-        # Python डेटा को JSON में बदलें ताकि JS इसे पढ़ सके
-        json_layout = json.dumps(layout_data)
-        
-        # पूरा HTML कोड इस f-string के अंदर होना चाहिए
-        html_template = f"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🏡 Smart Homestead Designer Pro 2026</title>
-<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-<style>
-*{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:'Segoe UI',Arial,sans-serif;background:#EAF4FB;color:#1a1a1a}}
-#main{{display:flex;height:100vh;overflow:hidden}}
-#sidebar{{width:310px;min-width:260px;background:#fff;border-right:1px solid #cde;overflow-y:auto;display:flex;flex-direction:column;z-index:10}}
-#sidebar-header{{background:#166534;color:#fff;padding:12px 14px}}
-#sidebar-header h2{{font-size:14px;font-weight:600;margin-bottom:1px}}
-#sidebar-header p{{font-size:10px;opacity:0.8}}
-#form-body{{padding:12px;flex:1}}
-.sec{{font-size:10px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:0.6px;margin:12px 0 5px;border-bottom:1px solid #e0eed8;padding-bottom:3px}}
-.field{{margin-bottom:8px}}
-.field label{{display:block;font-size:11px;color:#444;margin-bottom:2px;font-weight:500}}
-.field input[type=text],.field input[type=number],.field select{{width:100%;padding:5px 8px;font-size:12px;border:1px solid #ccc;border-radius:6px;background:#fafffe;color:#1a1a1a;outline:none}}
-.field input:focus,.field select:focus{{border-color:#166534}}
-.dim-row{{display:grid;grid-template-columns:1fr 1fr;gap:7px}}
-.check-group{{display:flex;flex-wrap:wrap;gap:4px}}
-.chip{{display:flex;align-items:center;gap:3px;padding:3px 8px;font-size:11px;border:1px solid #ccc;border-radius:16px;cursor:pointer;background:#f9f9f9;user-select:none;transition:all 0.12s}}
-.chip input{{display:none}}
-.chip.active{{background:#166534;color:#fff;border-color:#166534}}
-.rw{{display:flex;align-items:center;gap:6px}}
-.rw input[type=range]{{flex:1;accent-color:#166534;height:4px}}
-.rv{{font-size:12px;font-weight:600;color:#166534;min-width:22px;text-align:right}}
-#btn-gen{{width:100%;padding:9px;background:#166534;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;margin-top:5px}}
-#btn-gen:hover{{background:#15803d}}
-#btn-dl{{width:100%;padding:7px;background:#fff;color:#166534;border:1.5px solid #166534;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer;margin-top:5px}}
-#btn-dl:hover{{background:#f0fdf4}}
-#status{{font-size:10px;color:#555;text-align:center;padding:5px 0;min-height:20px}}
-#map-panel{{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}}
-#toolbar{{background:#fff;border-bottom:1px solid #cde;padding:6px 10px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}}
-#toolbar span{{font-size:11px;color:#555;margin-right:2px;font-weight:600}}
-.tgl-btn{{padding:3px 8px;font-size:10px;border:1px solid #aaa;border-radius:5px;background:#f5f5f5;cursor:pointer;transition:all 0.12s;white-space:nowrap}}
-.tgl-btn:hover{{border-color:#166634;color:#166534}}
-.tgl-btn.off{{opacity:0.38;text-decoration:line-through}}
-#cam-btns{{margin-left:auto;display:flex;gap:4px}}
-.cam-btn{{padding:3px 9px;font-size:10px;border:1px solid #90CAF9;border-radius:5px;background:#E3F2FD;cursor:pointer;color:#1565C0;white-space:nowrap}}
-.cam-btn:hover{{background:#BBDEFB}}
-#plotly-wrap{{flex:1;min-height:0;position:relative}}
-#plot{{width:100%;height:100%}}
-#ph{{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#888;gap:8px;background:#EAF4FB;position:absolute;inset:0}}
-#ph .icon{{font-size:44px}}
-#ph p{{font-size:13px}}
-#ov{{display:none;position:absolute;inset:0;background:rgba(234,244,251,0.85);align-items:center;justify-content:center;flex-direction:column;gap:10px;z-index:50}}
-#ov.on{{display:flex}}
-.spin{{width:36px;height:36px;border:3px solid #cde;border-top-color:#166534;border-radius:50%;animation:sp 0.75s linear infinite}}
-@keyframes sp{{to{{transform:rotate(360deg)}}}}
-</style>
-</head>
-<body>
-<div id="main">
-<div id="sidebar">
-  <div id="sidebar-header">
-    <h2>🌿 Smart Homestead Designer Pro</h2>
-    <p>Homestead Architect — Global Edition 2026</p>
-  </div>
-  <div id="form-body">
-    <div class="sec">📍 Location</div>
-    <div class="field"><label>Homestead location</label><input type="text" id="f-loc" value="Pune, India" placeholder="City, Country"/></div>
+    """Creates interactive 3D homestead models using Plotly."""
 
-    <div class="sec">📐 Plot Dimensions</div>
-    <div class="dim-row">
-      <div class="field"><label>Length (ft)</label><input type="number" id="f-len" value="300" min="50" max="5000"/></div>
-      <div class="field"><label>Width (ft)</label><input type="number" id="f-wid" value="300" min="50" max="5000"/></div>
-    </div>
+    ZONE_COLORS = {
+        'z0': '#F5F5DC',
+        'z1': '#90EE90',
+        'z2': '#228B22',
+        'z3': '#F0E68C',
+        'z4': '#DDA0DD',
+    }
+    ZONE_NAMES = {
+        'z0': 'Zone 0 â€“ Residential',
+        'z1': 'Zone 1 â€“ Kitchen Garden',
+        'z2': 'Zone 2 â€“ Food Forest',
+        'z3': 'Zone 3 â€“ Pasture / Crops',
+        'z4': 'Zone 4 â€“ Buffer Zone',
+    }
 
-    <div class="sec">🏠 House &amp; Terrain</div>
-    <div class="field"><label>House position</label>
-      <select id="f-hpos"><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Center" selected>Center</option><option value="Not built yet">Not built yet</option></select>
-    </div>
-    <div class="field"><label>Slope direction</label>
-      <select id="f-slope"><option value="Flat" selected>Flat</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option></select>
-    </div>
+    def create(self, layout: Dict[str, Any]) -> go.Figure:
+        fig = go.Figure()
 
-    <div class="sec">💧 Water Source</div>
-    <div class="field"><label>Primary water source</label>
-      <select id="f-water"><option value="Borewell/Well" selected>Borewell/Well</option><option value="Municipal Supply">Municipal Supply</option><option value="Rainwater">Rainwater</option><option value="River/Pond">River/Pond</option><option value="None yet">None yet</option></select>
-    </div>
+        self._add_terrain(fig, layout)
+        self._add_zones_3d(fig, layout)
+        self._add_house_3d(fig, layout)
+        self._add_features_3d(fig, layout)
+        self._add_all_livestock_3d(fig, layout)
+        self._add_trees_3d(fig, layout)
 
-    <div class="sec">🐄 Animals to Keep</div>
-    <div class="check-group" id="animals">
-      <label class="chip active"><input type="checkbox" value="Chickens" checked>🐔 Chickens</label>
-      <label class="chip active"><input type="checkbox" value="Goats" checked>🐐 Goats</label>
-      <label class="chip"><input type="checkbox" value="Pigs">🐷 Pigs</label>
-      <label class="chip active"><input type="checkbox" value="Cows" checked>🐄 Cows</label>
-      <label class="chip"><input type="checkbox" value="Bees">🐝 Bees</label>
-      <label class="chip"><input type="checkbox" value="Fish">🐟 Fish</label>
-    </div>
+        L = layout['dimensions']['L']
+        W = layout['dimensions']['W']
+        acres = layout.get('acres', round(L * W / 43560, 2))
 
-    <div class="sec">🌳 Food Forest</div>
-    <div class="field"><label>Fruit/Nut trees: <span id="tv">15</span></label>
-      <div class="rw"><input type="range" id="f-trees" min="5" max="50" value="15" oninput="document.getElementById('tv').textContent=this.value"/><span class="rv" id="f-trees-val">15</span></div>
-    </div>
+        fig.update_layout(
+            title=dict(
+                text=f"ðŸ¡ 3D Homestead â€” {acres:.2f} acres ({int(L)} Ã— {int(W)} ft)",
+                font=dict(size=17, color='#2E7D32', family='Arial'),
+                x=0.5,
+            ),
+            scene=dict(
+                xaxis_title='Length (ft)',
+                yaxis_title='Width (ft)',
+                zaxis_title='Height (ft)',
+                aspectmode='data',
+                bgcolor='#D0E8F5',
+                camera=dict(
+                    eye=dict(x=1.4, y=-1.4, z=0.9),
+                    up=dict(x=0, y=0, z=1),
+                ),
+                xaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
+                yaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
+                zaxis=dict(showgrid=True, gridcolor='#BBBBBB'),
+            ),
+            legend=dict(
+                x=0.01, y=0.99,
+                bgcolor='rgba(255,255,255,0.85)',
+                bordercolor='#AAAAAA', borderwidth=1,
+                font=dict(size=11),
+            ),
+            paper_bgcolor='#EAF4FB',
+            margin=dict(l=0, r=0, t=55, b=0),
+            width=950, height=670,
+        )
+        return fig
 
-    <div class="sec">💰 Budget</div>
-    <div class="field"><label>Budget range</label>
-      <select id="f-budget"><option>Under $5,000</option><option>$5,000 - $25,000</option><option>$25,000 - $100,000</option><option>$100,00,000+</option><option>Not sure</option></select>
-    </div>
+    # â”€â”€ Geometry primitives â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    <div id="status">Fill in details and click Generate</div>
-    <button id="btn-gen" onclick="generateMap()">🚀 Generate My Homestead Design</button>
-    <button id="btn-dl" onclick="downloadMap()">⬇ Download 3D Map (HTML)</button>
-  </div>
-</div>
+    @staticmethod
+    def _box_mesh(x0, y0, z0, x1, y1, z1, color, name,
+                  opacity=0.85, show_legend=True) -> go.Mesh3d:
+        vx = [x0, x1, x1, x0,  x0, x1, x1, x0]
+        vy = [y0, y0, y1, y1,  y0, y0, y1, y1]
+        vz = [z0, z0, z0, z0,  z1, z1, z1, z1]
+        fi = [0, 0,  4, 4,  0, 0,  2, 2,  0, 0,  1, 1]
+        fj = [1, 2,  5, 6,  1, 5,  3, 7,  3, 7,  2, 6]
+        fk = [2, 3,  6, 7,  5, 4,  7, 6,  7, 4,  6, 5]
+        return go.Mesh3d(
+            x=vx, y=vy, z=vz, i=fi, j=fj, k=fk,
+            color=color, opacity=opacity, name=name,
+            showlegend=show_legend, flatshading=True,
+            lighting=dict(ambient=0.65, diffuse=0.9, specular=0.2,
+                          roughness=0.6, fresnel=0.1),
+        )
 
-<div id="map-panel">
-  <div id="toolbar">
-    <span>Layers:</span>
-    <button class="tgl-btn" data-lg="Terrain" onclick="toggleLG(this)">🌍 Terrain</button>
-    <button class="tgl-btn" data-lg="Zones" onclick="toggleLG(this)">🗺 Zones</button>
-    <button class="tgl-btn" data-lg="Roads" onclick="toggleLG(this)">🛤 Roads</button>
-    <button class="tgl-btn" data-lg="House" onclick="toggleLG(this)">🏡 House</button>
-    <button class="tgl-btn" data-lg="Trees" onclick="toggleLG(this)">🌳 Trees</button>
-    <button class="tgl-btn" data-lg="Water" onclick="toggleLG(this)">💧 Water</button>
-    <button class="tgl-btn" data-lg="Livestock" onclick="toggleLG(this)">🐄 Animals</button>
-    <button class="tgl-btn" data-lg="Solar" onclick="toggleLG(this)">☀ Solar</button>
-    <button class="tgl-btn" data-lg="Garden" onclick="toggleLG(this)">🥬 Garden</button>
-    <div id="cam-btns">
-      <button class="cam-btn" onclick="setCam(1.3,-1.5,0.85)">3D</button>
-      <button class="cam-btn" onclick="setCam(0,0,2.5)">Top</button>
-      <button class="cam-btn" onclick="setCam(0,-2.5,0.5)">South</button>
-      <button class="cam-btn" onclick="setCam(0.05,-0.05,2.8)">Bird</button>
-    </div>
-  </div>
-  <div id="plotly-wrap">
-    <div id="ph"><div class="icon">🌿</div><p>Fill the form and click <b>Generate My Homestead Design</b></p></div>
-    <div id="plot"></div>
-    <div id="ov"><div class="spin"></div><p style="color:#166534;font-weight:500">Building 3D homestead...</p></div>
-  </div>
-</div>
-</div>
+    @staticmethod
+    def _hip_roof(x0, y0, x1, y1, base_z, apex_z, color,
+                  name='Roof') -> go.Mesh3d:
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        vx = [x0, x1, x1, x0, cx]
+        vy = [y0, y0, y1, y1, cy]
+        vz = [base_z] * 4 + [apex_z]
+        fi = [0, 1, 2, 3]
+        fj = [1, 2, 3, 0]
+        fk = [4, 4, 4, 4]
+        return go.Mesh3d(
+            x=vx, y=vy, z=vz, i=fi, j=fj, k=fk,
+            color=color, opacity=0.97, name=name,
+            showlegend=False, flatshading=True,
+        )
 
-<script>
-// Chip toggles
-document.querySelectorAll('.chip').forEach(c=>{{
-  c.addEventListener('click',()=>{{const cb=c.querySelector('input');cb.checked=!cb.checked;c.classList.toggle('active',cb.checked);}});
-}});
-// Sync range display
-document.getElementById('f-trees').addEventListener('input',function(){{
-  document.getElementById('tv').textContent=this.value;
-  document.getElementById('f-trees-val').textContent=this.value;
-}});
+    @staticmethod
+    def _cone_tree(tx, ty, trunk_bot_z=1.5, trunk_top_z=7.0,
+                   canopy_bot_z=7.0, canopy_top_z=18.0,
+                   canopy_r=7.5, trunk_r=1.2,
+                   color_canopy='#2E7D32', label='',
+                   show_legend=False) -> List:
+        traces = []
+        n = 18
+        theta_t = np.linspace(0, 2*np.pi, n)
+        z_t = np.array([trunk_bot_z, trunk_top_z])
+        T_grid, Z_grid = np.meshgrid(theta_t, z_t)
+        traces.append(go.Surface(
+            x=tx + trunk_r * np.cos(T_grid),
+            y=ty + trunk_r * np.sin(T_grid),
+            z=Z_grid,
+            colorscale=[[0, '#6D4C41'], [1, '#8D6E63']],
+            showscale=False, showlegend=False, opacity=0.95, name='Trunk',
+        ))
+        theta_c = np.linspace(0, 2*np.pi, n, endpoint=False)
+        vx = list(tx + canopy_r * np.cos(theta_c)) + [tx]
+        vy = list(ty + canopy_r * np.sin(theta_c)) + [ty]
+        vz = [canopy_bot_z] * n + [canopy_top_z]
+        apex = n
+        traces.append(go.Mesh3d(
+            x=vx, y=vy, z=vz,
+            i=list(range(n)),
+            j=[(k+1) % n for k in range(n)],
+            k=[apex] * n,
+            color=color_canopy, opacity=0.88,
+            name=label if label else 'Tree',
+            showlegend=show_legend, flatshading=True,
+        ))
+        return traces
 
-function getAnimals(){{return[...document.querySelectorAll('#animals input:checked')].map(c=>c.value);}}
-function clamp(v,lo,hi){{return Math.max(lo,Math.min(hi,v));}}
-function linspace(a,b,n){{const r=[];for(let i=0;i<n;i++)r.push(a+(b-a)*(n>1?i/(n-1):0));return r;}}
+    # â”€â”€ Scene layers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function getTZ(x,y,L,W,slope){{
-  if(slope==='South')return y*0.025;
-  if(slope==='North')return(W-y)*0.025;
-  if(slope==='East')return x*0.025;
-  if(slope==='West')return(L-x)*0.025;
-  return 0;
-}}
+    def _add_terrain(self, fig, layout):
+        L, W = layout['dimensions']['L'], layout['dimensions']['W']
+        x = np.linspace(0, L, 30)
+        y = np.linspace(0, W, 30)
+        X, Y = np.meshgrid(x, y)
+        slope = layout.get('slope', 'Flat')
+        Z = np.zeros_like(X)
+        if slope == 'South':   Z = Y * 0.03
+        elif slope == 'North': Z = (W - Y) * 0.03
+        elif slope == 'East':  Z = X * 0.03
+        elif slope == 'West':  Z = (L - X) * 0.03
+        fig.add_trace(go.Surface(
+            x=X, y=Y, z=Z,
+            colorscale=[[0, '#81C784'], [0.5, '#4CAF50'], [1, '#2E7D32']],
+            showscale=False, opacity=0.82,
+            name='Terrain', showlegend=True,
+            lighting=dict(ambient=0.7, diffuse=0.85),
+        ))
 
-function zoneRatios(acres){{
-  if(acres<0.5)return{{z0:.10,z1:.18,z2:.22,z3:.38,z4:.12}};
-  if(acres<5)  return{{z0:.08,z1:.14,z2:.28,z3:.35,z4:.15}};
-  return             {{z0:.05,z1:.10,z2:.35,z3:.30,z4:.20}};
-}}
+    def _add_zones_3d(self, fig, layout):
+        for zone_id, pos in layout.get('zone_positions', {}).items():
+            fig.add_trace(self._box_mesh(
+                pos['x'], pos['y'], 0,
+                pos['x'] + pos['width'], pos['y'] + pos['height'], 1.5,
+                color=self.ZONE_COLORS.get(zone_id, '#CCCCCC'),
+                name=self.ZONE_NAMES.get(zone_id, zone_id),
+                opacity=0.40,
+            ))
 
-function makeZonePos(L,W,zr,hpos){{
-  const pos={{}};
-  if(hpos==='North'){{let y=W;for(const z of['z0','z1','z2','z3','z4']){{const h=W*zr[z];y-=h;pos[z]={{x:0,y,width:L,height:h}};}}}}
-  else if(hpos==='East'){{let x=L;for(const z of['z0','z1','z2','z3','z4']){{const w=L*zr[z];x-=w;pos[z]={{x,y:0,width:w,height:W}};}}}}
-  else if(hpos==='West'){{let x=0;for(const z of['z0','z1','z2','z3','z4']){{const w=L*zr[z];pos[z]={{x,y:0,width:w,height:W}};x+=w;}}}}
-  else{{let y=0;for(const z of['z0','z1','z2','z3','z4']){{const h=W*zr[z];pos[z]={{x:0,y,width:L,height:h}};y+=h;}}}}
-  return pos;
-}}
+    def _add_house_3d(self, fig, layout):
+        L, W = layout['dimensions']['L'], layout['dimensions']['W']
+        pos = layout.get('house_position', 'Center')
+        positions = {
+            'North':        (L*0.30, W*0.82, L*0.40, W*0.12),
+            'South':        (L*0.30, W*0.06, L*0.40, W*0.12),
+            'East':         (L*0.75, W*0.35, L*0.20, W*0.30),
+            'West':         (L*0.05, W*0.35, L*0.20, W*0.30),
+            'Center':       (L*0.35, W*0.40, L*0.30, W*0.20),
+            'Not built yet':(L*0.35, W*0.40, L*0.30, W*0.20),
+        }
+        hx, hy, hw, hd = positions.get(pos, positions['Center'])
+        wall_h = 10.0
+        base_z = 1.5
+        roof_bot = base_z + wall_h
+        roof_top = roof_bot + min(hw, hd) * 0.42
 
-function houseBbox(L,W,hpos){{
-  const m={{
-    'North':[L*.30,W*.82,L*.38,W*.12],'South':[L*.30,W*.06,L*.38,W*.12],
-    'East':[L*.74,W*.36,L*.20,W*.28],'West':[L*.06,W*.36,L*.20,W*.28],
-    'Center':[L*.35,W*.40,L*.30,W*.20],'Not built yet':[L*.35,W*.40,L*.30,W*.20]
-  }};
-  return m[hpos]||m['Center'];
-}}
+        fig.add_trace(self._box_mesh(
+            hx, hy, base_z, hx+hw, hy+hd, roof_bot,
+            color='#8D6E63', name='House', opacity=0.96,
+        ))
+        fig.add_trace(self._hip_roof(
+            hx, hy, hx+hw, hy+hd,
+            base_z=roof_bot, apex_z=roof_top,
+            color='#4E342E',
+        ))
 
-class Reg{{
-  constructor(){{this.rects=[];this.circles=[];this.GAP=8;}}
-  addRect(x0,y0,x1,y1){{this.rects.push([Math.min(x0,x1),Math.min(y0,y1),Math.max(x0,x1),Math.max(y0,y1)]);}}
-  addCircle(cx,cy,r){{this.circles.push([cx,cy,r]);}}
-  rectOk(x0,y0,x1,y1){{
-    const g=this.GAP,ax0=Math.min(x0,x1)-g,ay0=Math.min(y0,y1)-g,ax1=Math.max(x0,x1)+g,ay1=Math.max(y0,y1)+g;
-    for(const[rx0,ry0,rx1,ry1]of this.rects)if(ax0<rx1&&ax1>rx0&&ay0<ry1&&ay1>ry0)return false;
-    for(const[cx,cy,r]of this.circles){{const nx=clamp(cx,ax0,ax1),ny=clamp(cy,ay0,ay1);if((cx-nx)**2+(cy-ny)**2<(r+g)**2)return false;}}
-    return true;
-  }}
-  circleOk(cx,cy,r){{
-    const g=this.GAP;
-    for(const[rx0,ry0,rx1,ry1]of this.rects){{const nx=clamp(cx,rx0,rx1),ny=clamp(cy,ry0,ry1);if((cx-nx)**2+(cy-ny)**2<(r+g)**2)return false;}}
-    for(const[ocx,ocy,or_]of this.circles)if((cx-ocx)**2+(cy-ocy)**2<(r+or_+g)**2)return false;
-    return true;
-  }}
-}}
+    def _add_features_3d(self, fig, layout):
+        features = layout.get('features', {})
 
-const TREE_SP={{
-  Mango:    {{th:5,cb:5,ct:20,cr:8, tr:1.0,c1:'#2E7D32',c2:'#388E3C'}},
-  Jackfruit:{{th:8,cb:8,ct:26,cr:9, tr:1.3,c1:'#1B5E20',c2:'#2E7D32'}},
-  Coconut:  {{th:20,cb:20,ct:30,cr:5,tr:0.6,c1:'#33691E',c2:'#558B2F'}},
-  Banana:   {{th:3,cb:3,ct:10,cr:4, tr:1.4,c1:'#558B2F',c2:'#7CB342'}},
-  Guava:    {{th:4,cb:4,ct:13,cr:4, tr:0.7,c1:'#33691E',c2:'#43A047'}},
-  Papaya:   {{th:4,cb:4,ct:11,cr:3, tr:0.5,c1:'#558B2F',c2:'#8BC34A'}},
-  Avocado:  {{th:7,cb:7,ct:18,cr:6, tr:0.9,c1:'#2E7D32',c2:'#1B5E20'}},
-  Moringa:  {{th:6,cb:6,ct:15,cr:3, tr:0.5,c1:'#66BB6A',c2:'#4CAF50'}},
-  Citrus:   {{th:4,cb:4,ct:12,cr:4, tr:0.6,c1:'#43A047',c2:'#66BB6A'}},
-  Neem:     {{th:9,cb:9,ct:24,cr:9, tr:1.1,c1:'#388E3C',c2:'#2E7D32'}},
-  Teak:     {{th:14,cb:14,ct:28,cr:7,tr:0.9,c1:'#1B5E20',c2:'#2E7D32'}},
-  Bamboo:   {{th:1,cb:1,ct:16,cr:2, tr:0.4,c1:'#4CAF50',c2:'#8BC34A'}},
-}};
-const SP_CYCLE=Object.keys(TREE_SP);
+        # Pond
+        if 'pond' in features:
+            f = features['pond']
+            r = f['radius']
+            rg = np.linspace(0, r, 10)
+            tg = np.linspace(0, 2*np.pi, 36)
+            R, T = np.meshgrid(rg, tg)
+            fig.add_trace(go.Surface(
+                x=f['x'] + R * np.cos(T) * (1 + 0.1 * np.sin(3*T)),
+                y=f['y'] + R * np.sin(T) * (1 + 0.1 * np.cos(2*T)),
+                z=np.full_like(R, -0.8),
+                colorscale=[[0, '#4FC3F7'], [1, '#0288D1']],
+                showscale=False, opacity=0.85,
+                name='Pond / Fish', showlegend=True,
+            ))
 
-function MB(x0,y0,z0,x1,y1,z1,col,name,lg,op=0.92,sl=false){{
-  return{{type:'mesh3d',
-    x:[x0,x1,x1,x0,x0,x1,x1,x0],y:[y0,y0,y1,y1,y0,y0,y1,y1],z:[z0,z0,z0,z0,z1,z1,z1,z1],
-    i:[0,0,4,4,0,0,2,2,0,0,1,1],j:[1,2,5,6,1,5,3,7,3,7,2,6],k:[2,3,6,7,5,4,7,6,7,4,6,5],
-    color:col,opacity:op,name,legendgroup:lg,showlegend:sl,flatshading:true,
-    lighting:{{ambient:0.65,diffuse:0.88,specular:0.25,roughness:0.55}}}};
-}}
-function MR(x0,y0,x1,y1,zb,zt,col,lg){{
-  const cx=(x0+x1)/2,cy=(y0+y1)/2;
-  return{{type:'mesh3d',x:[x0,x1,x1,x0,cx],y:[y0,y0,y1,y1,cy],z:[zb,zb,zb,zb,zt],
-    i:[0,1,2,3],j:[1,2,3,0],k:[4,4,4,4],color:col,opacity:.97,name:'Roof',legendgroup:lg,showlegend:false,flatshading:true}};
-}}
-function CYL(cx,cy,r,z0,z1,col,name,lg,sl=false,n=18){{
-  const t=linspace(0,2*Math.PI,n);
-  const X=[],Y=[],Z=[];
-  for(const zi of[z0,z1]){{X.push(t.map(a=>cx+r*Math.cos(a)));Y.push(t.map(a=>cy+r*Math.sin(a)));Z.push(t.map(()=>zi));}}
-  return{{type:'surface',x:X,y:Y,z:Z,colorscale:[[0,col],[1,col]],showscale:false,opacity:.92,name,legendgroup:lg,showlegend:sl}};
-}}
-function CONE(cx,cy,r,zb,zt,col,name,lg,sl=false,n=14){{
-  const t=linspace(0,2*Math.PI,n);
-  const xs=t.map(a=>cx+r*Math.cos(a)).concat([cx]),ys=t.map(a=>cy+r*Math.sin(a)).concat([cy]),zs=t.map(()=>zb).concat([zt]);
-  const ii=[],jj=[],kk=[];for(let i=0;i<n;i++){{ii.push(i);jj.push((i+1)%n);kk.push(n);}}
-  return{{type:'mesh3d',x:xs,y:ys,z:zs,i:ii,j:jj,k:kk,color:col,opacity:.88,name,legendgroup:lg,showlegend:sl,flatshading:true}};
-}}
-function ROADSUF(x0,y0,x1,y1,w,L,W,slope,name,lg,sl=false,col='#D7CCC8'){{
-  const vert=Math.abs(x1-x0)<Math.abs(y1-y0);
-  const X=[],Y=[],Z=[];
-  if(vert){{
-    const xs=linspace(x0-w/2,x0+w/2,3),ys=linspace(Math.min(y0,y1),Math.max(y0,y1),Math.max(4,Math.round(Math.abs(y1-y0)/15)+1));
-    for(let j=0;j<ys.length;j++){{X.push(xs.slice());Y.push(xs.map(()=>ys[j]));Z.push(xs.map(x=>getTZ(x,ys[j],L,W,slope)+.1));}}
-  }}else{{
-    const xs=linspace(Math.min(x0,x1),Math.max(x0,x1),Math.max(4,Math.round(Math.abs(x1-x0)/15)+1)),ys=linspace(y0-w/2,y0+w/2,3);
-    for(let j=0;j<ys.length;j++){{X.push(xs.slice());Y.push(xs.map(()=>ys[j]));Z.push(xs.map(x=>getTZ(x,ys[j],L,W,slope)+.1));}}
-  }}
-  return{{type:'surface',x:X,y:Y,z:Z,colorscale:[[0,col],[1,'#BCAAA4']],showscale:false,opacity:.9,name,legendgroup:lg,showlegend:sl}};
-}}
+        # Borewell
+        if 'well' in features:
+            f = features['well']
+            rw = f.get('radius', 4)
+            theta_w = np.linspace(0, 2*np.pi, 24)
+            z_w = np.array([1.5, 5.0])
+            Tw, Zw = np.meshgrid(theta_w, z_w)
+            fig.add_trace(go.Surface(
+                x=f['x'] + rw * np.cos(Tw),
+                y=f['y'] + rw * np.sin(Tw),
+                z=Zw,
+                colorscale=[[0, '#546E7A'], [1, '#90A4AE']],
+                showscale=False, opacity=0.95,
+                name='Borewell', showlegend=True,
+            ))
 
-function makeRNG(seed){{
-  let s=seed>>>0;
-  return ()=>{{s=(s*1664525+1013904223)>>>0;return s/0xFFFFFFFF;}};
-}}
+        # Solar panels
+        if 'solar' in features:
+            f = features['solar']
+            pw, ph = f['width'] / 3, f['height'] / 2
+            for col in range(3):
+                for row in range(2):
+                    px = f['x'] + col * pw + 1
+                    py = f['y'] + row * ph + 1
+                    fig.add_trace(self._box_mesh(
+                        px, py, 4.0,
+                        px + pw - 2, py + ph - 2, 4.4,
+                        color='#1565C0',
+                        name='Solar Panels' if (col == 0 and row == 0) else '',
+                        opacity=0.95,
+                        show_legend=(col == 0 and row == 0),
+                    ))
 
-let figData=null, lgMap={{}}, lgVis={{}};
+        # Greenhouse
+        if 'greenhouse' in features:
+            f = features['greenhouse']
+            gh_h = 8.0
+            base_z = 1.5
+            fig.add_trace(self._box_mesh(
+                f['x'], f['y'], base_z,
+                f['x']+f['width'], f['y']+f['height'], base_z+gh_h,
+                color='#E0F2F1', name='Greenhouse', opacity=0.35,
+            ))
+            fig.add_trace(self._hip_roof(
+                f['x'], f['y'], f['x']+f['width'], f['y']+f['height'],
+                base_z=base_z+gh_h,
+                apex_z=base_z+gh_h+f['width']*0.28,
+                color='#80CBC4', name='GH Roof',
+            ))
 
-function generateMap(){{
-  const L=parseFloat(document.getElementById('f-len').value)||300;
-  const W=parseFloat(document.getElementById('f-wid').value)||300;
-  const loc=document.getElementById('f-loc').value.trim()||'My Homestead';
-  const hpos=document.getElementById('f-hpos').value;
-  const slope=document.getElementById('f-slope').value;
-  const water=document.getElementById('f-water').value;
-  const animals=getAnimals();
-  const treeCount=parseInt(document.getElementById('f-trees').value)||15;
+        # Rain tank
+        if 'rain_tank' in features:
+            f = features['rain_tank']
+            fig.add_trace(self._box_mesh(
+                f['x'], f['y'], 1.5,
+                f['x']+f['width'], f['y']+f['height'], 7.0,
+                color='#4FC3F7', name='Rain Tank', opacity=0.80,
+            ))
 
-  document.getElementById('ov').classList.add('on');
-  document.getElementById('ph').style.display='none';
-  document.getElementById('status').textContent='Generating...';
+    def _add_all_livestock_3d(self, fig, layout):
+        """Draw each livestock type as a distinct 3D shed."""
+        features = layout.get('features', {})
 
-  setTimeout(()=>{{
-    try{{
-      _build(L,W,loc,hpos,slope,water,animals,treeCount);
-      const acres=(L*W/43560).toFixed(2);
-      document.getElementById('status').textContent=`✅ ${{loc}} — ${{L}}×${{W}} ft — ${{treeCount}} trees`;
-    }}catch(e){{
-      document.getElementById('status').textContent='❌ '+e.message;
-    }}
-    document.getElementById('ov').classList.remove('on');
-  }},80);
-}}
+        livestock_config = {
+            'goat_shed':   ('#FFCCBC', '#4E342E', 'Goat Shed',    7.0),
+            'chicken_coop':('#FFF9C4', '#F57F17', 'Chicken Coop', 5.0),
+            'piggery':     ('#F8BBD0', '#880E4F', 'Piggery',      6.0),
+            'cow_shed':    ('#D7CCC8', '#5D4037', 'Cow Shed',     9.0),
+            'fish_tanks':  ('#B3E5FC', '#0288D1', 'Fish Tanks',   3.0),
+            'bee_hives':   ('#FFF176', '#F9A825', 'Bee Hives',    4.0),
+        }
 
-function _build(L,W,loc,hpos,slope,water,animals,treeCount){{
-  const acres=L*W/43560;
-  const zr=zoneRatios(acres);
-  const zPos=makeZonePos(L,W,zr,hpos);
-  const [hx,hy,hw,hd]=houseBbox(L,W,hpos);
-  const reg=new Reg();
-  const traces=[];
-  lgMap={{}};lgVis={{}};
+        for key, (wall_color, roof_color, label, shed_h) in livestock_config.items():
+            if key not in features:
+                continue
+            f = features[key]
+            base_z = 1.5
+            roof_bot = base_z + shed_h
+            roof_top = roof_bot + f['width'] * 0.25
 
-  function add(tr,lg){{
-    if(!lgMap[lg])lgMap[lg]=[];
-    lgMap[lg].push(traces.length);
-    traces.push(tr);
-  }}
-  function tz(x,y){{return getTZ(x,y,L,W,slope);}}
+            fig.add_trace(self._box_mesh(
+                f['x'], f['y'], base_z,
+                f['x']+f['width'], f['y']+f['height'], roof_bot,
+                color=wall_color, name=label, opacity=0.90,
+            ))
+            fig.add_trace(self._hip_roof(
+                f['x'], f['y'], f['x']+f['width'], f['y']+f['height'],
+                base_z=roof_bot, apex_z=roof_top,
+                color=roof_color, name=f'{label} Roof',
+            ))
 
-  // Terrain
-  const tN=35,tXa=linspace(0,L,tN),tYa=linspace(0,W,tN);
-  const TX=[],TY=[],TZ_=[];
-  for(let j=0;j<tN;j++){{TX.push(tXa.slice());TY.push(tXa.map(()=>tYa[j]));TZ_.push(tXa.map(x=>tz(x,tYa[j])));}}
-  add({{type:'surface',x:TX,y:TY,z:TZ_,colorscale:[[0,'#33691E'],[.4,'#558B2F'],[.7,'#7CB342'],[1,'#9CCC65']],
-    showscale:false,opacity:.85,name:'Terrain',legendgroup:'Terrain',showlegend:true}},'Terrain');
+    def _add_trees_3d(self, fig, layout):
+        zone_pos = layout.get('zone_positions', {})
+        if 'z2' not in zone_pos:
+            return
+        z = zone_pos['z2']
+        rel_positions = [
+            (0.18, 0.30), (0.48, 0.58), (0.78, 0.38),
+            (0.28, 0.72), (0.68, 0.20), (0.58, 0.82),
+        ]
+        canopy_colors = ['#2E7D32', '#388E3C', '#1B5E20',
+                         '#43A047', '#66BB6A', '#33691E']
+        tree_labels = ['Mango', 'Coconut', 'Jackfruit',
+                       'Banana', 'Guava', 'Papaya']
 
-  // Zones
-  const ZC={{z0:[[0,'#FFF9C4'],[1,'#FFFDE7']],z1:[[0,'#A5D6A7'],[1,'#C8E6C9']],
-    z2:[[0,'#1B5E20'],[1,'#2E7D32']],z3:[[0,'#F9A825'],[1,'#FFF9C4']],z4:[[0,'#CE93D8'],[1,'#EDE7F6']]}};
-  let fz=true;
-  for(const[zid,pos]of Object.entries(zPos)){{
-    const{{x:zx,y:zy,width:zw,height:zh}}=pos;
-    const nX=Math.max(4,Math.round(zw/30)),nY=Math.max(4,Math.round(zh/30));
-    const ZXS=[],ZYS=[],ZZS=[];
-    for(let j=0;j<nY;j++){{const ry=zy+zh*j/(nY-1);ZXS.push(linspace(zx,zx+zw,nX));ZYS.push(linspace(zx,zx+zw,nX).map(()=>ry));ZZS.push(linspace(zx,zx+zw,nX).map(x=>tz(x,ry)+1.1));}}
-    add({{type:'surface',x:ZXS,y:ZYS,z:ZZS,colorscale:ZC[zid],showscale:false,opacity:.40,name:zid,legendgroup:'Zones',showlegend:fz}},'Zones');fz=false;
-  }}
-
-  // Roads & Infrastructure
-  const mw=10,pw=8,po=Math.min(14,L*.04,W*.04);
-  const hcx=hx+hw/2,hcy=hy+hd/2;
-  let fr=true;
-  function addRoad(x0,y0,x1,y1,w,col='#D7CCC8'){{
-    add(ROADSUF(x0,y0,x1,y1,w,L,W,slope,'Road','Roads',fr,col),'Roads');fr=false;
-  }}
-  addRoad(po,po,L-po,po,pw);addRoad(po,W-po,L-po,W-po,pw);
-  addRoad(hcx,po,hcx,hy,mw);
-
-  // House
-  const hb=tz(hcx,hcy)+1.5;
-  add(MB(hx,hy,hb,hx+hw,hy+hd,hb+10,'#D7CCC8','House','House',.95,true),'House');
-  add(MR(hx,hy,hx+hw,hy+hd,hb+10,hb+15,'#4E342E','House'),'House');
-
-  // Trees
-  const z2=zPos.z2;
-  if(z2){{
-    let ftree=true;
-    for(let i=0;i<Math.min(treeCount,40);i++){{
-      const tx=z2.x+Math.random()*z2.width, ty=z2.y+Math.random()*z2.height;
-      const tbb=tz(tx,ty)+1.3;
-      add(CYL(tx,ty,1.2,tbb,tbb+6,'#5D4037','Tree','Trees',ftree),'Trees');
-      add(CONE(tx,ty,6,tbb+6,tbb+18,'#2E7D32','Leaves','Trees',false),'Trees');
-      ftree=false;
-    }}
-  }}
-
-  const layout={{
-    scene:{{
-      xaxis:{{title:'Length',showgrid:true,backgroundcolor:'#EAF4FB'}},
-      yaxis:{{title:'Width',showgrid:true,backgroundcolor:'#EAF4FB'}},
-      zaxis:{{title:'Height',range:[-2,40]}},
-      aspectmode:'data',
-      camera:{{eye:{{x:1.3,y:-1.5,z:.85}}}}
-    }},
-    paper_bgcolor:'#EAF4FB',margin:{{l:0,r:0,t:65,b:0}},autosize:true
-  }};
-
-  figData={{traces,layout}};
-  Plotly.newPlot('plot',traces,layout,{{responsive:true}});
-}}
-
-function toggleLG(btn){{
-  const lg=btn.dataset.lg;
-  const nowHidden=lgVis[lg]===false;
-  lgVis[lg]=nowHidden?true:false;
-  Plotly.restyle('plot',{{visible:nowHidden?true:'legendonly'}},lgMap[lg]);
-  btn.classList.toggle('off',!nowHidden);
-}}
-
-function setCam(ex,ey,ez){{
-  Plotly.relayout('plot',{{'scene.camera.eye':{{x:ex,y:ey,z:ez}}}});
-}}
-
-function downloadMap(){{
-  const htmlContent=`<html><body><div id="p"></div><script src="https://cdn.plot.ly/plotly-2.27.0.min.js"><\/script><script>Plotly.newPlot('p',${{JSON.stringify(figData.traces)}},${{JSON.stringify(figData.layout)}});<\/script></body></html>`;
-  const blob=new Blob([htmlContent],{{type:'text/html'}});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='homestead_map.html';a.click();
-}}
-
-window.addEventListener('load',()=>setTimeout(generateMap,300));
-</script>
-</body>
-</html>
-        """
-        st.components.v1.html(html_template, height=800)
+        for idx, (rx, ry) in enumerate(rel_positions):
+            tx = z['x'] + rx * z['width']
+            ty = z['y'] + ry * z['height']
+            for trace in self._cone_tree(
+                tx, ty,
+                color_canopy=canopy_colors[idx % len(canopy_colors)],
+                label=tree_labels[idx % len(tree_labels)],
+                show_legend=(idx == 0),
+            ):
+                fig.add_trace(trace)
