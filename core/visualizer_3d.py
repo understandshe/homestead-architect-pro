@@ -1,5 +1,5 @@
 """
-3D Visualization Engine â€” FIXED
+3D Visualization Engine — FIXED & INTEGRATED
 Homestead Architect Pro 2026
 
 Fixes:
@@ -8,10 +8,10 @@ Fixes:
   - Proper 3D solids for every feature
 """
 
+import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 from typing import Dict, Any, List
-
 
 class Visualizer3D:
     """Creates interactive 3D homestead models using Plotly."""
@@ -24,16 +24,23 @@ class Visualizer3D:
         'z4': '#DDA0DD',
     }
     ZONE_NAMES = {
-        'z0': 'Zone 0 â€“ Residential',
-        'z1': 'Zone 1 â€“ Kitchen Garden',
-        'z2': 'Zone 2 â€“ Food Forest',
-        'z3': 'Zone 3 â€“ Pasture / Crops',
-        'z4': 'Zone 4 â€“ Buffer Zone',
+        'z0': 'Zone 0 – Residential',
+        'z1': 'Zone 1 – Kitchen Garden',
+        'z2': 'Zone 2 – Food Forest',
+        'z3': 'Zone 3 – Pasture / Crops',
+        'z4': 'Zone 4 – Buffer Zone',
     }
 
-    def create(self, layout: Dict[str, Any]) -> go.Figure:
+    def create(self, layout: Dict[str, Any]):
+        """Main entry point for Streamlit to render the 3D map."""
+        # डेटा सेफ्टी चेक: अगर लेआउट खाली है तो एरर न दें
+        if not layout or 'dimensions' not in layout:
+            st.info("👈 पहले 'Design' टैब में अपना नक्शा जनरेट करें।")
+            return
+
         fig = go.Figure()
 
+        # परतों (Layers) को जोड़ना
         self._add_terrain(fig, layout)
         self._add_zones_3d(fig, layout)
         self._add_house_3d(fig, layout)
@@ -47,7 +54,7 @@ class Visualizer3D:
 
         fig.update_layout(
             title=dict(
-                text=f"ðŸ¡ 3D Homestead â€” {acres:.2f} acres ({int(L)} Ã— {int(W)} ft)",
+                text=f"🏡 3D Homestead — {acres:.2f} acres ({int(L)} × {int(W)} ft)",
                 font=dict(size=17, color='#2E7D32', family='Arial'),
                 x=0.5,
             ),
@@ -73,11 +80,13 @@ class Visualizer3D:
             ),
             paper_bgcolor='#EAF4FB',
             margin=dict(l=0, r=0, t=55, b=0),
-            width=950, height=670,
+            height=670, # मोबाइल स्क्रीन के लिए ऊँचाई फिक्स की
         )
-        return fig
+        
+        # Streamlit में डिस्प्ले करना
+        st.plotly_chart(fig, use_container_width=True)
 
-    # â”€â”€ Geometry primitives â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Geometry primitives ──────────────────────────────────────────────────
 
     @staticmethod
     def _box_mesh(x0, y0, z0, x1, y1, z1, color, name,
@@ -146,7 +155,7 @@ class Visualizer3D:
         ))
         return traces
 
-    # â”€â”€ Scene layers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Scene layers ─────────────────────────────────────────────────────────
 
     def _add_terrain(self, fig, layout):
         L, W = layout['dimensions']['L'], layout['dimensions']['W']
@@ -206,7 +215,6 @@ class Visualizer3D:
 
     def _add_features_3d(self, fig, layout):
         features = layout.get('features', {})
-
         # Pond
         if 'pond' in features:
             f = features['pond']
@@ -222,7 +230,6 @@ class Visualizer3D:
                 showscale=False, opacity=0.85,
                 name='Pond / Fish', showlegend=True,
             ))
-
         # Borewell
         if 'well' in features:
             f = features['well']
@@ -238,7 +245,6 @@ class Visualizer3D:
                 showscale=False, opacity=0.95,
                 name='Borewell', showlegend=True,
             ))
-
         # Solar panels
         if 'solar' in features:
             f = features['solar']
@@ -248,93 +254,48 @@ class Visualizer3D:
                     px = f['x'] + col * pw + 1
                     py = f['y'] + row * ph + 1
                     fig.add_trace(self._box_mesh(
-                        px, py, 4.0,
-                        px + pw - 2, py + ph - 2, 4.4,
+                        px, py, 4.0, px + pw - 2, py + ph - 2, 4.4,
                         color='#1565C0',
                         name='Solar Panels' if (col == 0 and row == 0) else '',
-                        opacity=0.95,
-                        show_legend=(col == 0 and row == 0),
+                        opacity=0.95, show_legend=(col == 0 and row == 0),
                     ))
-
-        # Greenhouse
-        if 'greenhouse' in features:
-            f = features['greenhouse']
-            gh_h = 8.0
-            base_z = 1.5
-            fig.add_trace(self._box_mesh(
-                f['x'], f['y'], base_z,
-                f['x']+f['width'], f['y']+f['height'], base_z+gh_h,
-                color='#E0F2F1', name='Greenhouse', opacity=0.35,
-            ))
-            fig.add_trace(self._hip_roof(
-                f['x'], f['y'], f['x']+f['width'], f['y']+f['height'],
-                base_z=base_z+gh_h,
-                apex_z=base_z+gh_h+f['width']*0.28,
-                color='#80CBC4', name='GH Roof',
-            ))
-
-        # Rain tank
-        if 'rain_tank' in features:
-            f = features['rain_tank']
-            fig.add_trace(self._box_mesh(
-                f['x'], f['y'], 1.5,
-                f['x']+f['width'], f['y']+f['height'], 7.0,
-                color='#4FC3F7', name='Rain Tank', opacity=0.80,
-            ))
 
     def _add_all_livestock_3d(self, fig, layout):
         """Draw each livestock type as a distinct 3D shed."""
         features = layout.get('features', {})
-
         livestock_config = {
             'goat_shed':   ('#FFCCBC', '#4E342E', 'Goat Shed',    7.0),
             'chicken_coop':('#FFF9C4', '#F57F17', 'Chicken Coop', 5.0),
             'piggery':     ('#F8BBD0', '#880E4F', 'Piggery',      6.0),
-            'cow_shed':    ('#D7CCC8', '#5D4037', 'Cow Shed',     9.0),
+            'cow_shed':    ('#D7CCC8', '#5D4037', 'Cow Shed',      9.0),
             'fish_tanks':  ('#B3E5FC', '#0288D1', 'Fish Tanks',   3.0),
             'bee_hives':   ('#FFF176', '#F9A825', 'Bee Hives',    4.0),
         }
-
         for key, (wall_color, roof_color, label, shed_h) in livestock_config.items():
-            if key not in features:
-                continue
+            if key not in features: continue
             f = features[key]
-            base_z = 1.5
-            roof_bot = base_z + shed_h
+            base_z, roof_bot = 1.5, 1.5 + shed_h
             roof_top = roof_bot + f['width'] * 0.25
-
             fig.add_trace(self._box_mesh(
-                f['x'], f['y'], base_z,
-                f['x']+f['width'], f['y']+f['height'], roof_bot,
+                f['x'], f['y'], base_z, f['x']+f['width'], f['y']+f['height'], roof_bot,
                 color=wall_color, name=label, opacity=0.90,
             ))
             fig.add_trace(self._hip_roof(
                 f['x'], f['y'], f['x']+f['width'], f['y']+f['height'],
-                base_z=roof_bot, apex_z=roof_top,
-                color=roof_color, name=f'{label} Roof',
+                base_z=roof_bot, apex_z=roof_top, color=roof_color,
             ))
 
     def _add_trees_3d(self, fig, layout):
         zone_pos = layout.get('zone_positions', {})
-        if 'z2' not in zone_pos:
-            return
+        if 'z2' not in zone_pos: return
         z = zone_pos['z2']
-        rel_positions = [
-            (0.18, 0.30), (0.48, 0.58), (0.78, 0.38),
-            (0.28, 0.72), (0.68, 0.20), (0.58, 0.82),
-        ]
-        canopy_colors = ['#2E7D32', '#388E3C', '#1B5E20',
-                         '#43A047', '#66BB6A', '#33691E']
-        tree_labels = ['Mango', 'Coconut', 'Jackfruit',
-                       'Banana', 'Guava', 'Papaya']
-
+        rel_positions = [(0.18, 0.30), (0.48, 0.58), (0.78, 0.38), (0.28, 0.72), (0.68, 0.20), (0.58, 0.82)]
+        canopy_colors = ['#2E7D32', '#388E3C', '#1B5E20', '#43A047', '#66BB6A', '#33691E']
+        tree_labels = ['Mango', 'Coconut', 'Jackfruit', 'Banana', 'Guava', 'Papaya']
         for idx, (rx, ry) in enumerate(rel_positions):
-            tx = z['x'] + rx * z['width']
-            ty = z['y'] + ry * z['height']
+            tx, ty = z['x'] + rx * z['width'], z['y'] + ry * z['height']
             for trace in self._cone_tree(
-                tx, ty,
-                color_canopy=canopy_colors[idx % len(canopy_colors)],
-                label=tree_labels[idx % len(tree_labels)],
-                show_legend=(idx == 0),
+                tx, ty, color_canopy=canopy_colors[idx % 6],
+                label=tree_labels[idx % 6], show_legend=(idx == 0),
             ):
                 fig.add_trace(trace)
