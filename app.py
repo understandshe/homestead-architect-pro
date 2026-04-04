@@ -1,4 +1,3 @@
-
 """
 Homestead Architect Pro 2026 — APP (Fixed for ULTRA EDITION Visualizer)
 Connects to: visualizer_3d.py (your ULTRA EDITION with HTML download)
@@ -7,6 +6,7 @@ Connects to: visualizer_3d.py (your ULTRA EDITION with HTML download)
 import streamlit as st
 import sys
 import io
+import subprocess
 from pathlib import Path
 
 # Path setup
@@ -37,14 +37,14 @@ except ImportError:
         # Try core folder
         from core.visualizer_3d import Visualizer3D
     except ImportError as e:
-        st.error("❌ visualizer_3d.py not found!")
+        st.error("visualizer_3d.py not found.")
         st.error("Expected: visualizer_3d.py in root or core/ folder")
         st.stop()
 
 # Page config
 st.set_page_config(
     page_title='Homestead Architect Pro 2026',
-    page_icon='🏡',
+    page_icon='H',
     layout='wide'
 )
 
@@ -57,20 +57,34 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def _build_version() -> str:
+    """Return deploy build marker to verify latest release on Streamlit Cloud."""
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], text=True
+        ).strip()
+    except Exception:
+        return "unknown"
+
 
 def main():
-    st.markdown('<p class="main-header">🏡 Homestead Architect Pro</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">ULTRA EDITION with 3D Labels & HTML Export</p>', unsafe_allow_html=True)
+    build_id = _build_version()
+    st.markdown('<p class="main-header">Homestead Architect Pro</p>', unsafe_allow_html=True)
+    st.markdown(
+        f'<p class="sub-header">ULTRA EDITION with 3D Labels & HTML Export | Build: {build_id}</p>',
+        unsafe_allow_html=True
+    )
     
     with st.sidebar:
-        st.title('⚙️ Settings')
-        watermark_enabled = st.checkbox('☑️ Watermark (chundalgardens.com)', value=True)
+        st.title('Settings')
+        watermark_enabled = st.checkbox('Watermark (chundalgardens.com)', value=True)
         st.divider()
         st.markdown('Made by: **Chundal Gardens**')
-        st.markdown('🌐 chundalgardens.com')
+        st.markdown('chundalgardens.com')
+        st.caption(f"Build: {build_id}")
     
     # Tabs
-    tabs = st.tabs(['🎨 Design', '🌐 3D View', '🐑 Livestock', '💰 Costs', '📥 Download'])
+    tabs = st.tabs(['Design', '3D View', 'Livestock', 'Costs', 'Download'])
     
     with tabs[0]: design_tab(watermark_enabled)
     with tabs[1]: view_3d_tab()
@@ -81,7 +95,7 @@ def main():
 
 def design_tab(watermark_enabled):
     """Design tab - generates layout"""
-    st.header('🎨 Smart Homestead Designer')
+    st.header('Smart Homestead Designer')
     
     interview = UserInterview()
     answers = interview.run()
@@ -89,7 +103,7 @@ def design_tab(watermark_enabled):
     if not answers:
         return
     
-    st.markdown('<div class="success-box">✅ Generating your design...</div>', unsafe_allow_html=True)
+    st.markdown('<div class="success-box">Generating your design...</div>', unsafe_allow_html=True)
     
     col1, col2 = st.columns([2, 1])
     
@@ -97,6 +111,10 @@ def design_tab(watermark_enabled):
         with st.spinner('Rendering...'):
             engine = LayoutEngine()
             layout = engine.generate(answers)
+            # Preserve user context for premium map/PDF personalization.
+            layout['location'] = answers.get('location', layout.get('location', 'Custom Location'))
+            layout['water_source'] = answers.get('water_source', layout.get('water_source', ''))
+            layout['slope'] = answers.get('slope', layout.get('slope', 'Flat'))
             
             viz = Visualizer2D()
             raw_map = viz.create(layout, answers)
@@ -124,22 +142,22 @@ def design_tab(watermark_enabled):
             
             lv = [x for x in ld.get('livestock', []) if x and x != 'None']
             if lv:
-                st.info('🐾 Animals: ' + ', '.join(lv))
+                st.info('Animals: ' + ', '.join(lv))
             
             if answers.get('location'):
                 try:
                     climate = ClimateEngine().get_data(answers['location'])
-                    st.info(f"⛅ Climate: **{climate['zone']}**")
+                    st.info(f"Climate: **{climate['zone']}**")
                 except:
                     pass
 
 
 def view_3d_tab():
     """3D View tab - uses YOUR ULTRA EDITION visualizer"""
-    st.header('🌐 Interactive 3D Cinematic View')
+    st.header('Interactive 3D Cinematic View')
     
     if 'layout_data' not in st.session_state:
-        st.info('👈 Please generate a design in the Design tab first.')
+        st.info('Please generate a design in the Design tab first.')
         # Empty call to show the tool
         viz3d = Visualizer3D()
         viz3d.create({})
@@ -155,7 +173,7 @@ def view_3d_tab():
 
 def livestock_tab():
     """Livestock tab"""
-    st.header('🐑 Livestock Housing Designer')
+    st.header('Livestock Housing Designer')
     designer = LivestockDesigner()
     
     col1, col2 = st.columns(2)
@@ -166,7 +184,7 @@ def livestock_tab():
         climate = st.selectbox('Climate', ['Tropical', 'Dry', 'Temperate', 'Cold'])
         budget = st.selectbox('Budget', ['Basic', 'Standard', 'Premium'])
     
-    if st.button('🏗️ Generate Housing Plan', use_container_width=True):
+    if st.button('Generate Housing Plan', use_container_width=True):
         with st.spinner('Designing...'):
             design = designer.create_housing(animal, count, climate, budget)
             st.image(design['floor_plan'], use_column_width=True)
@@ -185,7 +203,7 @@ def livestock_tab():
 
 def costs_tab():
     """Costs tab"""
-    st.header('💰 Global Cost Calculator')
+    st.header('Global Cost Calculator')
     calc = CostCalculator()
     
     c1, c2, c3 = st.columns(3)
@@ -196,7 +214,7 @@ def costs_tab():
     with c3:
         size = st.selectbox('Farm Size', ['Small (< 0.5 acre)', 'Medium (0.5-5 acres)', 'Large (5+ acres)'])
     
-    if st.button('💵 Calculate Investment', use_container_width=True):
+    if st.button('Calculate Investment', use_container_width=True):
         with st.spinner('Calculating...'):
             costs = calc.estimate(country, currency, size)
             c1, c2, c3 = st.columns(3)
@@ -207,7 +225,7 @@ def costs_tab():
 
 def download_tab(watermark_enabled):
     """Download tab"""
-    st.header('📥 Download Your Professional Plan')
+    st.header('Download Your Professional Plan')
     
     if 'current_map' not in st.session_state:
         st.warning('Please generate a design first.')
@@ -216,11 +234,11 @@ def download_tab(watermark_enabled):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader('🗺️ Site Map (PNG)')
+        st.subheader('Site Map (PNG)')
         buf = st.session_state['current_map']
         buf.seek(0)
         st.download_button(
-            '⬇️ Download Site Map',
+            'Download Site Map',
             data=buf,
             file_name='homestead_site_plan.png',
             mime='image/png',
@@ -228,8 +246,8 @@ def download_tab(watermark_enabled):
         )
     
     with col2:
-        st.subheader('📄 Full PDF Report')
-        if st.button('📑 Generate PDF Report', use_container_width=True):
+        st.subheader('Full PDF Report')
+        if st.button('Generate PDF Report', use_container_width=True):
             with st.spinner('Creating PDF...'):
                 pdf_gen = PDFGenerator()
                 raw = st.session_state.get('raw_map')
@@ -242,9 +260,9 @@ def download_tab(watermark_enabled):
                     map_image_buffer=raw,
                     threed_image_buffer=None
                 )
-                st.success('✅ PDF Ready!')
+                st.success('PDF Ready')
                 st.download_button(
-                    '⬇️ Download PDF Report',
+                    'Download PDF Report',
                     data=pdf_buf,
                     file_name='homestead_report.pdf',
                     mime='application/pdf',
