@@ -6,6 +6,7 @@ Rules: zero overlaps, smart roads, dynamic animals, all sizes
 
 import matplotlib
 matplotlib.use('Agg')
+from core.shared_geometry import HomesteadGeometry
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, Circle, Rectangle, Polygon, Arc
 import matplotlib.patheffects as pe
@@ -134,32 +135,52 @@ def _raised_bed(ax, x, y, w, h, zorder=6):
 
 
 def _road(ax, pts, width, color='#D2B48C', alpha=0.88, zorder=4):
-    """Smooth catmull-rom road. pts = list of (x,y). Road stops AT endpoints."""
+    """PREMIUM Catmull-Rom road with shadow + dashed center line."""
     if len(pts) < 2:
         return
     arr = np.array(pts, dtype=float)
     n = len(arr)
     xs, ys = [], []
     for i in range(n - 1):
-        p0 = arr[max(0, i-1)]; p1 = arr[i]; p2 = arr[i+1]; p3 = arr[min(n-1, i+2)]
+        p0 = arr[max(0, i-1)]; p1 = arr[i]
+        p2 = arr[i+1]; p3 = arr[min(n-1, i+2)]
         t1 = (p2 - p0) * 0.5; t2 = (p3 - p1) * 0.5
-        steps = max(12, int(np.hypot(*(p2-p1)) / 5) + 1)
+        steps = max(16, int(np.hypot(*(p2-p1)) / 4) + 1)
         for s in np.linspace(0, 1, steps):
-            h00=2*s**3-3*s**2+1; h10=s**3-2*s**2+s; h01=-2*s**3+3*s**2; h11=s**3-s**2
+            h00 = 2*s**3 - 3*s**2 + 1
+            h10 = s**3 - 2*s**2 + s
+            h01 = -2*s**3 + 3*s**2
+            h11 = s**3 - s**2
             pt = h00*p1 + h10*t1 + h01*p2 + h11*t2
             xs.append(pt[0]); ys.append(pt[1])
+
     xs = np.array(xs); ys = np.array(ys)
     dx = np.gradient(xs); dy = np.gradient(ys)
     ln = np.hypot(dx, dy) + 1e-9
     nx_, ny_ = -dy/ln, dx/ln
     hw = width / 2
+
+    # Shadow
+    xu_s = xs + nx_*(hw+1.5); yu_s = ys + ny_*(hw+1.5)
+    xd_s = xs - nx_*(hw+1.5); yd_s = ys - ny_*(hw+1.5)
+    ax.fill(np.concatenate([xu_s, xd_s[::-1]]),
+            np.concatenate([yu_s, yd_s[::-1]]),
+            color='#5D4037', alpha=0.12, zorder=zorder-1)
+
+    # Road body
     xu = xs + nx_*hw; yu = ys + ny_*hw
     xd = xs - nx_*hw; yd = ys - ny_*hw
     ax.fill(np.concatenate([xu, xd[::-1]]),
             np.concatenate([yu, yd[::-1]]),
             color=color, alpha=alpha, zorder=zorder)
-    ax.plot(xu, yu, color='#BCAAA4', lw=0.6, alpha=0.55, zorder=zorder+1)
-    ax.plot(xd, yd, color='#BCAAA4', lw=0.6, alpha=0.55, zorder=zorder+1)
+
+    # Edge lines
+    ax.plot(xu, yu, color='#8D6E63', lw=0.8, alpha=0.65, zorder=zorder+1)
+    ax.plot(xd, yd, color='#8D6E63', lw=0.8, alpha=0.65, zorder=zorder+1)
+
+    # Center dashed line (PREMIUM)
+    ax.plot(xs, ys, color='white', lw=max(0.8, width*0.06),
+            alpha=0.45, zorder=zorder+2, linestyle=(0, (8, 6)))
 
 
 # ─────────────────────────────────────────────────
@@ -179,6 +200,7 @@ class Visualizer2D:
 
     def __init__(self):
         self._reg: Optional[_Reg2D] = None
+        self._geo: Optional[HomesteadGeometry] = None
         self._L = 300.0
         self._W = 300.0
 
@@ -186,13 +208,14 @@ class Visualizer2D:
     #  PUBLIC API
     # ─────────────────────────────────────────────
     def create(self, layout: dict, answers: dict) -> BytesIO:
-        dims = layout.get('dimensions', {})
-        L = max(50.0, float(dims.get('L', dims.get('length', 300))))
-        W = max(50.0, float(dims.get('W', dims.get('width', 300))))
-        self._reg = _Reg2D(L, W)
-        self._L = L; self._W = W
-        unit  = min(L, W)
+        # ── USE SHARED GEOMETRY ──
+        self._geo = HomesteadGeometry(layout)
+        L, W = self._geo.L, self._geo.W
+        unit = self._geo.unit
         small = unit < 150
+        self._L = L; self._W = W
+
+        self._reg = _Reg2D(L, W)
 
         fig, ax = plt.subplots(figsize=(18, max(10, 18*(W/L)*0.72)), dpi=150)
         fig.patch.set_facecolor('#F9F6F0')
@@ -204,15 +227,15 @@ class Visualizer2D:
         self._contours(ax, layout, L, W)
         self._fence_and_gate(ax, L, W, unit)
 
-        # House bbox — register FIRST so everything avoids it
-        hx, hy, hw, hh = self._house_bbox(layout, L, W, unit)
+        # House bbox — FROM SHARED GEOMETRY (same as 3D!)
+        hx, hy, hw, hh = self._geo.house_bbox()
         self._reg.reg_rect(hx, hy, hw, hh)
 
         # Water BEFORE roads/sheds (so roads avoid pond)
         self._water(ax, layout, L, W, unit)
 
-        # Roads — planned AFTER house + water registered
-        self._roads(ax, layout, L, W, unit, hx, hy, hw, hh, small)
+        # Roads — FROM SHARED GEOMETRY ENGINE
+        self._roads_from_geometry(ax, small)
 
         # Utilities
         self._utilities(ax, layout, L, W, unit, small)
@@ -339,18 +362,24 @@ class Visualizer2D:
         self._gcx = gcx; self._ghw = ghw
 
     # ─────────────────────────────────────────────
-    #  HOUSE BBOX — realistic size, centered in Z0
+    #  ROADS — from shared geometry engine
     # ─────────────────────────────────────────────
-    def _house_bbox(self, layout, L, W, unit) -> Tuple[float,float,float,float]:
-        zp = layout.get('zone_positions', {})
-        z0 = zp.get('z0', {'x':0,'y':0,'width':L,'height':W})
-        hw = max(40.0, min(unit*0.15, 110.0))
-        hh = max(28.0, min(unit*0.11, 80.0))
-        z0cx = z0['x'] + z0['width']/2
-        z0cy = z0['y'] + z0['height']/2
-        hx = max(z0['x']+3, min(z0cx-hw/2, z0['x']+z0['width']-hw-3))
-        hy = max(z0['y']+3, min(z0cy-hh/2, z0['y']+z0['height']-hh-3))
-        return hx, hy, hw, hh
+    def _roads_from_geometry(self, ax, small):
+        """Draw ALL roads from shared geometry engine."""
+        roads = self._geo.road_network()
+        for road in roads:
+            _road(ax, road['points'], road['width'],
+                  road['color'], road['alpha'], road['zorder'])
+
+        # Register main road corridor for collision avoidance
+        if roads:
+            r0 = roads[0]
+            pts = r0['points']
+            rw = r0['width']
+            min_x = min(p[0] for p in pts) - rw * 1.5
+            min_y = min(p[1] for p in pts)
+            max_x = max(p[0] for p in pts) + rw * 1.5
+            self._reg.reg_rect(min_x, 0, max_x - min_x, min_y)
 
     # ─────────────────────────────────────────────
     #  WATER FEATURES
@@ -427,84 +456,6 @@ class Visualizer2D:
                 ax.text(rx+rw/2, ry+rh/2, 'RAIN\nTANK', ha='center', va='center',
                         fontsize=max(5,rw*0.09), color='#01579B',
                         fontweight='bold', zorder=z+1)
-
-    # ─────────────────────────────────────────────
-    #  ROAD SYSTEM
-    #  Gate→House (main), House→Z1 (stops at zone edge),
-    #  House→Z3 (stops at zone edge), branch roads inside Z3
-    # ─────────────────────────────────────────────
-    def _roads(self, ax, layout, L, W, unit, hx, hy, hw, hh, small):
-        rw_main = max(7, unit*0.030)
-        rw_sec  = max(5, unit*0.018)
-        rw_br   = max(3, unit*0.012)
-        gcx = getattr(self, '_gcx', L/2)
-        door_cx = hx + hw/2
-
-        # ── 1) MAIN: Gate → House front door ──────
-        mid_x = door_cx + (gcx - door_cx)*0.15
-        mid_y = hy * 0.45
-        _road(ax, [(gcx,0),(mid_x,mid_y),(door_cx,hy)],
-              rw_main, '#D2B48C', alpha=0.90, zorder=4)
-        # Register road corridor so beds/trees avoid it
-        self._reg.reg_rect(min(gcx,door_cx)-rw_main, 0,
-                           abs(gcx-door_cx)+rw_main*2.5, hy)
-
-        if small:
-            return  # Small plots: only main road
-
-        zones = layout.get('zone_positions', {})
-
-        # ── 2) SECONDARY: House → Z1 edge (stop at zone boundary) ──
-        if 'z1' in zones:
-            z1 = zones['z1']
-            # Entry point = closest edge of z1 to house
-            z1_entry_x = z1['x'] + z1['width']*0.5
-            z1_entry_y = z1['y'] + z1['height']  # bottom edge of z1
-            if z1['y'] > hy + hh:  # z1 is above house
-                z1_entry_y = z1['y']
-            elif z1['y'] + z1['height'] < hy:  # z1 is below house
-                z1_entry_y = z1['y'] + z1['height']
-            # Road goes from house side to z1 EDGE only (not inside)
-            start_x = hx + hw*0.4
-            start_y = hy + hh
-            _road(ax, [(start_x, start_y),
-                       (start_x + (z1_entry_x-start_x)*0.4, (start_y+z1_entry_y)*0.5),
-                       (z1_entry_x, z1_entry_y)],
-                  rw_sec, '#D7CCC8', alpha=0.76, zorder=4)
-
-        # ── 3) SECONDARY: House → Z3 entry ──────
-        if 'z3' in zones:
-            z3 = zones['z3']
-            z3_entry_x = z3['x'] + z3['width']*0.35
-            # Entry = closest z3 edge to house
-            if z3['y'] > hy + hh:
-                z3_entry_y = z3['y']
-            elif z3['y'] + z3['height'] < hy:
-                z3_entry_y = z3['y'] + z3['height']
-            else:
-                z3_entry_y = z3['y']
-            start_x2 = hx + hw*0.75
-            _road(ax, [(start_x2, hy+hh),
-                       (start_x2 + L*0.015, (hy+hh+z3_entry_y)*0.5),
-                       (z3_entry_x, z3_entry_y)],
-                  rw_sec, '#D7CCC8', alpha=0.72, zorder=4)
-
-            # ── 4) BRANCH ROADS inside Z3 (to each shed) ──
-            feats = layout.get('features', {})
-            shed_keys = ['goat_shed','chicken_coop','piggery','cow_shed','fish_tanks','bee_hives']
-            for sk in shed_keys:
-                if sk not in feats or not feats[sk]: continue
-                f = feats[sk]
-                if not isinstance(f, dict): continue
-                sx = float(f.get('x',0)) + float(f.get('width',30))/2
-                sy = float(f.get('y',0))
-                # Road from z3 entry to shed front, only inside z3
-                bx1 = max(z3['x'], min(z3_entry_x, z3['x']+z3['width']))
-                by1 = z3_entry_y
-                bx2 = max(z3['x'], min(sx, z3['x']+z3['width']))
-                by2 = max(z3['y'], min(sy, z3['y']+z3['height']))
-                _road(ax, [(bx1,by1),(bx2,by2)],
-                      rw_br, '#BCAAA4', alpha=0.62, zorder=3)
 
     # ─────────────────────────────────────────────
     #  UTILITIES
