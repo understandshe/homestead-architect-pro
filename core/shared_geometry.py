@@ -4,6 +4,15 @@ Homestead Architect Pro 2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BOTH 2D and 3D MUST use this for ALL positions.
 This ensures maps are IDENTICAL.
+
+ROAD LOGIC:
+  - Gate always on boundary OPPOSITE to house
+  - North house → gate South (y=0), road goes UP
+  - South house → gate South (y=0), road goes UP  
+  - East house  → gate West (x=0),  road goes RIGHT
+  - West house  → gate East (x=L),  road goes LEFT
+  - Door always faces gate (nearest face to gate)
+  - Branch roads to ONLY the sheds user selected
 """
 import math
 from typing import Dict, Any, Tuple, List, Optional
@@ -19,19 +28,14 @@ class HomesteadGeometry:
         self.W = max(50.0, float(dims.get('W', dims.get('width', 300))))
         self.unit = min(self.L, self.W)
         self.scale = max(self.L, self.W) / 300.0
+        self._hp = layout.get('house_position', 'South')
 
     # ══════════════════════════════════════════════════
-    #  HOUSE BBOX — EXACTLY SAME FOR 2D + 3D
-    #  This MUST match what layout_engine uses for features
+    #  HOUSE BBOX
     # ══════════════════════════════════════════════════
     def house_bbox(self) -> Tuple[float, float, float, float]:
-        """
-        Returns (hx, hy, hw, hh) — IDENTICAL for both maps.
-        Matches layout_engine._house_bbox formula exactly.
-        """
         zp = self.layout.get('zone_positions', {})
         z0 = zp.get('z0', {'x': 0, 'y': 0, 'width': self.L, 'height': self.W})
-
         MIN_HW = max(self.L * 0.08, 40.0)
         MIN_HH = max(self.W * 0.03, 30.0)
         hw = max(z0['width'] * 0.55, MIN_HW)
@@ -43,101 +47,182 @@ class HomesteadGeometry:
         return hx, hy, hw, hh
 
     # ══════════════════════════════════════════════════
-    #  DOOR POSITION
+    #  GATE — always on boundary FACING the road
+    #  Rule: gate is on the boundary closest to public road
+    #        which is OPPOSITE to where house_pos is
+    # ══════════════════════════════════════════════════
+    def main_gate(self) -> Tuple[float, float]:
+        hp = self._hp
+        if hp == 'East':
+            return 0.0, self.W / 2        # gate on West boundary
+        elif hp == 'West':
+            return self.L, self.W / 2     # gate on East boundary
+        else:
+            # North, South, Center, Not built yet → gate always South
+            return self.L / 2, 0.0
+
+    # ══════════════════════════════════════════════════
+    #  DOOR — face of house nearest to gate
     # ══════════════════════════════════════════════════
     def house_door(self) -> Tuple[float, float]:
         hx, hy, hw, hh = self.house_bbox()
-        return hx + hw / 2, hy
+        hp = self._hp
+        if hp == 'East':
+            # House on right → door on LEFT face (faces west gate)
+            return hx, hy + hh / 2
+        elif hp == 'West':
+            # House on left → door on RIGHT face (faces east gate)
+            return hx + hw, hy + hh / 2
+        elif hp == 'North':
+            # House at top → door on BOTTOM face (faces south gate)
+            return hx + hw / 2, hy
+        else:
+            # South / Center → door on BOTTOM face
+            return hx + hw / 2, hy
 
     # ══════════════════════════════════════════════════
-    #  GATE POSITION
-    # ══════════════════════════════════════════════════
-    def main_gate(self) -> Tuple[float, float]:
-        return self.L / 2, 0
-
-    # ══════════════════════════════════════════════════
-    #  ROAD NETWORK — shared for both 2D + 3D
+    #  ROAD NETWORK
+    #  - Main road: Gate → House door (straight, correct direction)
+    #  - Secondary: House → Z1 (kitchen garden side)
+    #  - Secondary: House → Z3 entry
+    #  - Branch roads: Z3 entry → ONLY sheds user selected
     # ══════════════════════════════════════════════════
     def road_network(self) -> List[Dict[str, Any]]:
-        """
-        Returns list of road segments for BOTH maps.
-        Each: {name, points:[(x,y),...], width, color, alpha, zorder}
-        """
         hx, hy, hw, hh = self.house_bbox()
-        gcx, _ = self.main_gate()
+        gcx, gcy = self.main_gate()
         door_cx, door_cy = self.house_door()
+        hp = self._hp
+
         rw_main = max(7, self.unit * 0.030)
-        rw_sec = max(5, self.unit * 0.018)
-        rw_br = max(3, self.unit * 0.012)
+        rw_sec  = max(5, self.unit * 0.018)
+        rw_br   = max(3, self.unit * 0.012)
         zones = self.layout.get('zone_positions', {})
         feats = self.layout.get('features', {})
         roads = []
 
-        # 1. MAIN ROAD: Gate → House front
-        mid_x = door_cx + (gcx - door_cx) * 0.15
-        mid_y = door_cy * 0.45
+        # ── 1. MAIN ROAD: Gate → House door ──────────────────────────
+        # Simple curve: 1 control point, road goes directly toward door
+        # No zigzag, no wrong direction
+        if hp in ('East', 'West'):
+            # Horizontal road
+            ctrl_x = gcx + (door_cx - gcx) * 0.5
+            ctrl_y = gcy + (door_cy - gcy) * 0.3
+        else:
+            # Vertical road (North, South, Center)
+            # ctrl point: X shifts slightly toward door, Y halfway
+            ctrl_x = gcx + (door_cx - gcx) * 0.3
+            ctrl_y = gcy + (door_cy - gcy) * 0.5
+
         roads.append({
             'name': 'main_road',
-            'points': [(gcx, 0), (mid_x, mid_y), (door_cx, door_cy)],
+            'points': [(gcx, gcy), (ctrl_x, ctrl_y), (door_cx, door_cy)],
             'width': rw_main, 'color': '#D2B48C', 'alpha': 0.90, 'zorder': 4,
         })
 
         if self.unit < 150:
             return roads
 
-        # 2. SECONDARY: House → Z1 edge
+        # ── 2. SECONDARY: House → Z1 edge ────────────────────────────
         if 'z1' in zones:
             z1 = zones['z1']
             z1_entry_x = z1['x'] + z1['width'] * 0.5
-            if z1['y'] > hy + hh:
-                z1_entry_y = z1['y']
-            elif z1['y'] + z1['height'] < hy:
-                z1_entry_y = z1['y'] + z1['height']
+
+            # Find which face of z1 is nearest to house
+            if z1['y'] >= hy + hh:
+                z1_entry_y = z1['y']               # z1 is above house
+            elif z1['y'] + z1['height'] <= hy:
+                z1_entry_y = z1['y'] + z1['height'] # z1 is below house
+            elif z1['x'] >= hx + hw:
+                z1_entry_x = z1['x']               # z1 is right of house
+                z1_entry_y = z1['y'] + z1['height'] * 0.5
             else:
-                z1_entry_y = z1['y']
-            start_x = hx + hw * 0.4
-            start_y = hy + hh
+                z1_entry_x = z1['x'] + z1['width'] # z1 is left of house
+                z1_entry_y = z1['y'] + z1['height'] * 0.5
+
+            # Start from house face nearest z1
+            if z1['y'] >= hy + hh:
+                start_x = hx + hw * 0.4
+                start_y = hy + hh
+            elif z1['y'] + z1['height'] <= hy:
+                start_x = hx + hw * 0.4
+                start_y = hy
+            elif z1['x'] >= hx + hw:
+                start_x = hx + hw
+                start_y = hy + hh * 0.5
+            else:
+                start_x = hx
+                start_y = hy + hh * 0.5
+
             ctrl_x = start_x + (z1_entry_x - start_x) * 0.4
-            ctrl_y = (start_y + z1_entry_y) * 0.5
+            ctrl_y = start_y + (z1_entry_y - start_y) * 0.5
             roads.append({
                 'name': 'house_to_z1',
-                'points': [(start_x, start_y), (ctrl_x, ctrl_y), (z1_entry_x, z1_entry_y)],
+                'points': [(start_x, start_y), (ctrl_x, ctrl_y),
+                           (z1_entry_x, z1_entry_y)],
                 'width': rw_sec, 'color': '#D7CCC8', 'alpha': 0.76, 'zorder': 4,
             })
 
-        # 3. SECONDARY: House → Z3 entry
+        # ── 3. SECONDARY: House → Z3 entry ───────────────────────────
         z3 = zones.get('z3')
         if z3:
             z3_entry_x = z3['x'] + z3['width'] * 0.35
-            if z3['y'] > hy + hh:
+
+            if z3['y'] >= hy + hh:
                 z3_entry_y = z3['y']
-            elif z3['y'] + z3['height'] < hy:
+            elif z3['y'] + z3['height'] <= hy:
                 z3_entry_y = z3['y'] + z3['height']
+            elif z3['x'] >= hx + hw:
+                z3_entry_x = z3['x']
+                z3_entry_y = z3['y'] + z3['height'] * 0.35
             else:
-                z3_entry_y = z3['y']
-            start_x2 = hx + hw * 0.75
-            ctrl2_x = start_x2 + self.L * 0.015
-            ctrl2_y = (hy + hh + z3_entry_y) * 0.5
+                z3_entry_x = z3['x'] + z3['width']
+                z3_entry_y = z3['y'] + z3['height'] * 0.35
+
+            # Start from house face nearest z3
+            if z3['y'] >= hy + hh:
+                start_x2 = hx + hw * 0.75
+                start_y2 = hy + hh
+            elif z3['y'] + z3['height'] <= hy:
+                start_x2 = hx + hw * 0.75
+                start_y2 = hy
+            elif z3['x'] >= hx + hw:
+                start_x2 = hx + hw
+                start_y2 = hy + hh * 0.5
+            else:
+                start_x2 = hx
+                start_y2 = hy + hh * 0.5
+
+            ctrl2_x = start_x2 + (z3_entry_x - start_x2) * 0.5
+            ctrl2_y = start_y2 + (z3_entry_y - start_y2) * 0.5
             roads.append({
                 'name': 'house_to_z3',
-                'points': [(start_x2, hy + hh), (ctrl2_x, ctrl2_y), (z3_entry_x, z3_entry_y)],
+                'points': [(start_x2, start_y2), (ctrl2_x, ctrl2_y),
+                           (z3_entry_x, z3_entry_y)],
                 'width': rw_sec, 'color': '#D7CCC8', 'alpha': 0.72, 'zorder': 4,
             })
 
-            # 4. BRANCH ROADS inside Z3 → each shed
-            shed_keys = ['goat_shed', 'chicken_coop', 'piggery', 'cow_shed', 'fish_tanks', 'bee_hives']
+            # ── 4. BRANCH ROADS: Z3 entry → ONLY existing sheds ──────
+            # Only sheds that user actually selected will be in feats
+            shed_keys = [
+                'goat_shed', 'chicken_coop', 'piggery',
+                'cow_shed', 'fish_tanks', 'bee_hives'
+            ]
             for sk in shed_keys:
                 if sk not in feats or not feats[sk]:
-                    continue
+                    continue                        # user didn't select → skip
                 f = feats[sk]
                 if not isinstance(f, dict):
                     continue
-                sx = float(f.get('x', 0)) + float(f.get('width', 30)) / 2
-                sy = float(f.get('y', 0))
+                # Road goes to FRONT of shed (center-x, front-y)
+                shed_cx = float(f.get('x', 0)) + float(f.get('width', 30)) / 2
+                shed_front_y = float(f.get('y', 0))
+
+                # Clamp inside z3
                 bx1 = max(z3['x'], min(z3_entry_x, z3['x'] + z3['width']))
                 by1 = z3_entry_y
-                bx2 = max(z3['x'], min(sx, z3['x'] + z3['width']))
-                by2 = max(z3['y'], min(sy, z3['y'] + z3['height']))
+                bx2 = max(z3['x'] + 1, min(shed_cx, z3['x'] + z3['width'] - 1))
+                by2 = max(z3['y'] + 1, min(shed_front_y, z3['y'] + z3['height'] - 1))
+
                 roads.append({
                     'name': f'z3_to_{sk}',
                     'points': [(bx1, by1), (bx2, by2)],
@@ -162,7 +247,7 @@ class HomesteadGeometry:
         return 0.0
 
     # ══════════════════════════════════════════════════
-    #  FEATURE / ZONE helpers
+    #  HELPERS
     # ══════════════════════════════════════════════════
     def get_feature(self, key: str) -> Optional[Dict]:
         feats = self.layout.get('features', {})
