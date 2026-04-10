@@ -23,6 +23,7 @@ import plotly.graph_objects as go
 import numpy as np
 from typing import Dict, Any, List
 import math
+from core.shared_geometry import HomesteadGeometry
 
 
 class Visualizer3D:
@@ -62,26 +63,22 @@ class Visualizer3D:
             st.info("pehle 'Design' tab mein apna naksha generate karein.")
             return
 
-        dims = layout['dimensions']
-        L = float(dims.get('L', dims.get('length', 300)))
-        W = float(dims.get('W', dims.get('width', 300)))
-        if L <= 0: L = 300.0
-        if W <= 0: W = 300.0
-
-        scale = max(L, W) / 300.0
+        # ── USE SHARED GEOMETRY ──
+        geo = HomesteadGeometry(layout)
+        L, W, scale = geo.L, geo.W, geo.scale
 
         fig = go.Figure()
 
-        self._terrain(fig, layout, L, W, scale)
-        self._zones(fig, layout, L, W, scale)
-        self._paths(fig, layout, L, W, scale)
-        self._water_features(fig, layout, L, W, scale)
-        self._house(fig, layout, L, W, scale)
-        self._kitchen_garden(fig, layout, L, W, scale)
-        self._livestock(fig, layout, L, W, scale)
-        self._food_forest(fig, layout, L, W, scale)
-        self._utilities(fig, layout, L, W, scale)
-        self._labels(fig, layout, L, W, scale)
+        self._terrain(fig, layout, L, W, scale, geo)
+        self._zones(fig, layout, L, W, scale, geo)
+        self._paths(fig, layout, L, W, scale, geo)
+        self._water_features(fig, layout, L, W, scale, geo)
+        self._house(fig, layout, L, W, scale, geo)
+        self._kitchen_garden(fig, layout, L, W, scale, geo)
+        self._livestock(fig, layout, L, W, scale, geo)
+        self._food_forest(fig, layout, L, W, scale, geo)
+        self._utilities(fig, layout, L, W, scale, geo)
+        self._labels(fig, layout, L, W, scale, geo)
 
         acres     = layout.get('acres', round(L * W / 43560, 2))
         loc_name  = layout.get('location', 'Custom Plot')
@@ -168,40 +165,11 @@ class Visualizer3D:
             tc = 15
         return max(3, min(60, tc))
 
-    def _house_bbox(self, layout, L, W):
-        """
-        EXACT mirror of Visualizer2D._house_bbox.
-        Returns (hx, hy, hw, hh).
-        """
-        zone_positions = layout.get('zone_positions', {})
-        z0 = zone_positions.get('z0', {'x': 0, 'y': 0, 'width': L, 'height': W})
-
-        MIN_HW = max(L * 0.08, 40.0)
-        MIN_HH = max(W * 0.03, 30.0)
-        hw = max(z0['width'] * 0.55, MIN_HW)
-        hh = max(z0['height'] * 0.65, MIN_HH)
-        hw = min(hw, z0['width'] * 0.85)
-        hh = min(hh, z0['height'] * 0.90)
-        hx = z0['x'] + (z0['width'] - hw) / 2
-        hy = z0['y'] + (z0['height'] - hh) / 2
-        return hx, hy, hw, hh
-
-    def _slope_z(self, x, y, layout, L, W, scale) -> float:
-        slope = layout.get('slope', 'Flat')
-        sf = max(L, W) * 0.018 * scale
-        if slope == 'South':   return y / W * sf
-        if slope == 'North':   return (1 - y / W) * sf
-        if slope == 'East':    return x / L * sf
-        if slope == 'West':    return (1 - x / L) * sf
-        if slope == 'Mixed/Undulating':
-            return (math.sin(x / L * math.pi) * 0.5 + math.cos(y / W * math.pi) * 0.3) * sf
-        return 0.0
-
     # ══════════════════════════════════════════════════════
     #  TERRAIN
     # ══════════════════════════════════════════════════════
 
-    def _terrain(self, fig, layout, L, W, scale):
+    def _terrain(self, fig, layout, L, W, scale, geo):
         nx, ny = 48, 48
         x = np.linspace(0, L, nx)
         y = np.linspace(0, W, ny)
@@ -247,7 +215,7 @@ class Visualizer3D:
         ))
 
         # Plot boundary
-        bz0 = self._slope_z(0, 0, layout, L, W, scale) + 0.3
+        bz0 = geo.slope_z(0, 0) + 0.3
         fig.add_trace(go.Scatter3d(
             x=[0, L, L, 0, 0], y=[0, 0, W, W, 0], z=[bz0] * 5,
             mode='lines',
@@ -261,7 +229,7 @@ class Visualizer3D:
     #  ZONES (from layout['zone_positions'])
     # ══════════════════════════════════════════════════════
 
-    def _zones(self, fig, layout, L, W, scale):
+    def _zones(self, fig, layout, L, W, scale, geo):
         for zid, pos in layout.get('zone_positions', {}).items():
             x0, y0 = pos['x'], pos['y']
             x1 = x0 + pos['width']
@@ -273,7 +241,7 @@ class Visualizer3D:
             yg = np.linspace(y0, y1, 10)
             XG, YG = np.meshgrid(xg, yg)
             ZG = np.vectorize(
-                lambda xi, yi: self._slope_z(xi, yi, layout, L, W, scale) + 0.38
+                lambda xi, yi: geo.slope_z(xi, yi) + 0.38
             )(XG, YG)
 
             fig.add_trace(go.Surface(
@@ -286,7 +254,7 @@ class Visualizer3D:
 
             cx = [x0, x1, x1, x0, x0]
             cy = [y0, y0, y1, y1, y0]
-            cz = [self._slope_z(xi, yi, layout, L, W, scale) + 0.55
+            cz = [geo.slope_z(xi, yi) + 0.55
                   for xi, yi in zip(cx, cy)]
             fig.add_trace(go.Scatter3d(
                 x=cx, y=cy, z=cz, mode='lines',
@@ -298,49 +266,43 @@ class Visualizer3D:
     #  PATHS
     # ══════════════════════════════════════════════════════
 
-    def _paths(self, fig, layout, L, W, scale):
-        hx, hy, hw, hh = self._house_bbox(layout, L, W)
-        door_cx = hx + hw / 2
+    def _paths(self, fig, layout, L, W, scale, geo):
+        """Draw ALL roads from shared geometry — SAME as 2D."""
+        roads = geo.road_network()
+        for road in roads:
+            pts = road['points']
+            path_x, path_y, path_z = [], [], []
+            arr = np.array(pts, dtype=float)
+            n = len(arr)
+            for i in range(n - 1):
+                p0 = arr[max(0, i-1)]; p1 = arr[i]
+                p2 = arr[i+1]; p3 = arr[min(n-1, i+2)]
+                t1 = (p2 - p0) * 0.5; t2 = (p3 - p1) * 0.5
+                steps = max(8, int(np.hypot(*(p2-p1)) / 8) + 1)
+                for s in np.linspace(0, 1, steps):
+                    h00 = 2*s**3-3*s**2+1; h10 = s**3-2*s**2+s
+                    h01 = -2*s**3+3*s**2; h11 = s**3-s**2
+                    pt = h00*p1 + h10*t1 + h01*p2 + h11*t2
+                    path_x.append(pt[0])
+                    path_y.append(pt[1])
+                    path_z.append(geo.slope_z(pt[0], pt[1]) + 0.7)
 
-        n_pts = 14
-        path_x, path_y, path_z = [], [], []
-        for i in range(n_pts):
-            t = i / (n_pts - 1)
-            px = door_cx + math.sin(t * math.pi) * L * 0.022 * (1 - t)
-            py = t * hy
-            pz = self._slope_z(px, py, layout, L, W, scale) + 0.7
-            path_x.append(px); path_y.append(py); path_z.append(pz)
-
-        fig.add_trace(go.Scatter3d(
-            x=path_x, y=path_y, z=path_z,
-            mode='lines', line=dict(color='#D2B48C', width=10),
-            name='Gravel Path', showlegend=True, hoverinfo='skip',
-        ))
-
-        # Farm road to z3
-        z3 = layout.get('zone_positions', {}).get('z3')
-        if z3:
-            farm_x = hx + hw * 0.75
-            z3_cx = z3['x'] + z3['width'] * 0.4
-            z3_cy = z3['y']
-            farm_pts = [
-                (farm_x, hy + hh),
-                ((farm_x + z3_cx) / 2 + L * 0.02, (hy + hh + z3_cy) / 2),
-                (z3_cx, z3_cy),
-            ]
+            w = max(road['width'] * 0.7, 4)
+            is_main = 'main' in road['name']
             fig.add_trace(go.Scatter3d(
-                x=[p[0] for p in farm_pts],
-                y=[p[1] for p in farm_pts],
-                z=[self._slope_z(p[0], p[1], layout, L, W, scale) + 0.7 for p in farm_pts],
-                mode='lines', line=dict(color='#BCAAA4', width=7, dash='dot'),
-                showlegend=False, hoverinfo='skip',
+                x=path_x, y=path_y, z=path_z,
+                mode='lines',
+                line=dict(color=road['color'], width=w,
+                          dash='dot' if not is_main else None),
+                name='Main Road' if is_main else 'Path',
+                showlegend=is_main, hoverinfo='skip',
             ))
 
     # ══════════════════════════════════════════════════════
     #  WATER FEATURES (from layout['features'])
     # ══════════════════════════════════════════════════════
 
-    def _water_features(self, fig, layout, L, W, scale):
+    def _water_features(self, fig, layout, L, W, scale, geo):
         features = layout.get('features', {})
 
         for key in ('borewell', 'well'):
@@ -351,7 +313,7 @@ class Visualizer3D:
                 continue
             wx, wy = f['x'], f['y']
             r = max(3.0, f.get('radius', min(L, W) * 0.022))
-            wz_base = self._slope_z(wx, wy, layout, L, W, scale) + 1.5
+            wz_base = geo.slope_z(wx, wy) + 1.5
             wall_h  = r * 2.2 * scale
 
             theta = np.linspace(0, 2 * math.pi, 32)
@@ -376,14 +338,14 @@ class Visualizer3D:
             f = features['pond']
             px, py = f['x'], f['y']
             pr = max(6.0, f['radius'])
-            pz_base = self._slope_z(px, py, layout, L, W, scale) - 0.8
+            pz_base = geo.slope_z(px, py) - 0.8
 
             theta = np.linspace(0, 2 * math.pi, 40)
             rim_r = pr * (1 + 0.10 * np.sin(3 * theta) + 0.06 * np.cos(5 * theta))
             rg = np.linspace(0, 1, 14)
             RG2, TG2 = np.meshgrid(rg, theta)
             R_actual = RG2 * rim_r[:, np.newaxis]
-            ZP = pz_base * (1 - RG2 ** 2) + self._slope_z(px, py, layout, L, W, scale) * RG2 ** 2
+            ZP = pz_base * (1 - RG2 ** 2) + geo.slope_z(px, py) * RG2 ** 2
 
             fig.add_trace(go.Surface(
                 x=px + R_actual * np.cos(TG2),
@@ -400,7 +362,7 @@ class Visualizer3D:
             f = features['rain_tank']
             rx, ry = f['x'], f['y']
             rw, rh2 = f['width'], f['height']
-            gz_rt = self._slope_z(rx + rw / 2, ry + rh2 / 2, layout, L, W, scale) + 1.5
+            gz_rt = geo.slope_z(rx + rw / 2, ry + rh2 / 2) + 1.5
             tank_h = max(L, W) * 0.04 * scale
             fig.add_trace(self._box_mesh(
                 rx, ry, gz_rt, rx + rw, ry + rh2, gz_rt + tank_h,
@@ -411,9 +373,9 @@ class Visualizer3D:
     #  HOUSE (same position as 2D via _house_bbox)
     # ══════════════════════════════════════════════════════
 
-    def _house(self, fig, layout, L, W, scale):
-        hx, hy, hw, hh = self._house_bbox(layout, L, W)
-        gz      = self._slope_z(hx + hw / 2, hy + hh / 2, layout, L, W, scale)
+    def _house(self, fig, layout, L, W, scale, geo):
+        hx, hy, hw, hh = geo.house_bbox()
+        gz      = geo.slope_z(hx + hw / 2, hy + hh / 2)
         found_t = gz + 1.5
         wall_h  = max(L, W) * 0.055 * scale
         wall_t  = found_t + wall_h
@@ -550,7 +512,7 @@ class Visualizer3D:
     #  KITCHEN GARDEN (from zone_positions['z1'])
     # ══════════════════════════════════════════════════════
 
-    def _kitchen_garden(self, fig, layout, L, W, scale):
+    def _kitchen_garden(self, fig, layout, L, W, scale, geo):
         zones = layout.get('zone_positions', {})
         if 'z1' not in zones:
             return
@@ -569,7 +531,7 @@ class Visualizer3D:
             if bx + bed_w > x0 + gw - pad:
                 break
             by = y0 + pad
-            bz = self._slope_z(bx + bed_w / 2, by + bed_h / 2, layout, L, W, scale) + 0.5
+            bz = geo.slope_z(bx + bed_w / 2, by + bed_h / 2) + 0.5
             raise_h = 1.3 * scale
 
             # Wooden frame
@@ -602,7 +564,7 @@ class Visualizer3D:
         cxc = x0 + gw * 0.80
         cyc = y0 + gh * 0.65
         csz = min(gw, gh) * 0.11
-        gzc = self._slope_z(cxc, cyc, layout, L, W, scale) + 0.5
+        gzc = geo.slope_z(cxc, cyc) + 0.5
         fig.add_trace(self._box_mesh(
             cxc, cyc, gzc, cxc + csz, cyc + csz, gzc + csz * 1.5 * scale,
             '#795548', 'Compost', opacity=0.92, show_legend=False
@@ -612,7 +574,7 @@ class Visualizer3D:
     #  LIVESTOCK (from layout['features'])
     # ══════════════════════════════════════════════════════
 
-    def _livestock(self, fig, layout, L, W, scale):
+    def _livestock(self, fig, layout, L, W, scale, geo):
         features = layout.get('features', {})
 
         for key, cfg in self.LIVESTOCK_CFG.items():
@@ -626,7 +588,7 @@ class Visualizer3D:
             sx, sy = f['x'], f['y']
             sw, sd = f['width'], f['height']
 
-            gz_s = self._slope_z(sx + sw / 2, sy + sd / 2, layout, L, W, scale)
+            gz_s = geo.slope_z(sx + sw / 2, sy + sd / 2)
             bz   = gz_s + 1.5
             top  = bz + shed_h_base * scale
             rt   = top + sw * 0.22 * scale
@@ -691,7 +653,7 @@ class Visualizer3D:
     #  FOOD FOREST TREES (from zone_positions['z2'])
     # ══════════════════════════════════════════════════════
 
-    def _food_forest(self, fig, layout, L, W, scale):
+    def _food_forest(self, fig, layout, L, W, scale, geo):
         zones = layout.get('zone_positions', {})
         if 'z2' not in zones:
             return
@@ -743,7 +705,7 @@ class Visualizer3D:
             cr_b, h_b, color, t_lbl = tree_types[idx % len(tree_types)]
             cr     = cr_b * scale
             h_tree = h_b * scale
-            gz_tree = self._slope_z(tx_c, ty_c, layout, L, W, scale)
+            gz_tree = geo.slope_z(tx_c, ty_c)
 
             trunk_bot = gz_tree + 0.3
             trunk_top = trunk_bot + h_tree * 0.38
@@ -768,14 +730,14 @@ class Visualizer3D:
     #  UTILITIES (solar, greenhouse)
     # ══════════════════════════════════════════════════════
 
-    def _utilities(self, fig, layout, L, W, scale):
+    def _utilities(self, fig, layout, L, W, scale, geo):
         features = layout.get('features', {})
 
         if 'solar' in features and features['solar']:
             f = features['solar']
             sx, sy = f['x'], f['y']
             sw_s, sd_s = f['width'], f['height']
-            gz_s = self._slope_z(sx + sw_s / 2, sy + sd_s / 2, layout, L, W, scale) + 1.5
+            gz_s = geo.slope_z(sx + sw_s / 2, sy + sd_s / 2) + 1.5
             fig.add_trace(self._box_mesh(
                 sx, sy, gz_s, sx + sw_s, sy + sd_s, gz_s + 0.4 * scale + sw_s * 0.12 * scale,
                 '#1565C0', 'Solar Array', opacity=0.92
@@ -785,7 +747,7 @@ class Visualizer3D:
             f = features['greenhouse']
             gx, gy = f['x'], f['y']
             gw_g, gh_g = f['width'], f['height']
-            gz_g = self._slope_z(gx + gw_g / 2, gy + gh_g / 2, layout, L, W, scale) + 1.5
+            gz_g = geo.slope_z(gx + gw_g / 2, gy + gh_g / 2) + 1.5
             gr_h = gw_g * 0.32 * scale
             fig.add_trace(self._box_mesh(
                 gx, gy, gz_g, gx + gw_g, gy + gh_g, gz_g + gr_h,
@@ -801,18 +763,18 @@ class Visualizer3D:
     #  LABELS
     # ══════════════════════════════════════════════════════
 
-    def _labels(self, fig, layout, L, W, scale):
+    def _labels(self, fig, layout, L, W, scale, geo):
         label_data = []
         lz = max(L, W) * 0.07 * scale
 
-        hx, hy, hw, hh = self._house_bbox(layout, L, W)
-        gz_h = self._slope_z(hx + hw / 2, hy + hh / 2, layout, L, W, scale)
+        hx, hy, hw, hh = geo.house_bbox()
+        gz_h = geo.slope_z(hx + hw / 2, hy + hh / 2)
         label_data.append({'x': hx + hw / 2, 'y': hy + hh / 2, 'z': gz_h + lz, 'text': 'RESIDENCE'})
 
         for zid, pos in layout.get('zone_positions', {}).items():
             cx = pos['x'] + pos['width'] * 0.5
             cy = pos['y'] + pos['height'] * 0.85
-            gz_z = self._slope_z(cx, cy, layout, L, W, scale)
+            gz_z = geo.slope_z(cx, cy)
             label_data.append({
                 'x': cx, 'y': cy, 'z': gz_z + lz * 0.38,
                 'text': self.ZONE_NAMES.get(zid, zid).split('–')[-1].strip()
@@ -826,7 +788,7 @@ class Visualizer3D:
             _, _, lbl, sh_h, _e = cfg
             sx, sy = f['x'], f['y']
             sw_l, sd_l = f['width'], f['height']
-            gz_lbl = self._slope_z(sx + sw_l / 2, sy + sd_l / 2, layout, L, W, scale)
+            gz_lbl = geo.slope_z(sx + sw_l / 2, sy + sd_l / 2)
             label_data.append({
                 'x': sx + sw_l / 2, 'y': sy + sd_l / 2,
                 'z': gz_lbl + 1.5 + sh_h * scale + lz * 0.32,
@@ -836,7 +798,7 @@ class Visualizer3D:
         for wkey in ('pond', 'borewell', 'well'):
             if wkey in features and features[wkey]:
                 f = features[wkey]
-                gz_w = self._slope_z(f['x'], f['y'], layout, L, W, scale)
+                gz_w = geo.slope_z(f['x'], f['y'])
                 label_data.append({
                     'x': f['x'], 'y': f['y'],
                     'z': gz_w + lz * 0.5,
